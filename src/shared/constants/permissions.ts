@@ -1,0 +1,68 @@
+import type { Permission, RoleSlug } from '@/domain/enums';
+import { ALL_PERMISSIONS } from '@/domain/enums';
+
+export const DEFAULT_ROLE_PERMISSIONS: Record<RoleSlug, Permission[]> = {
+  super_admin: [...ALL_PERMISSIONS],
+  admin: ALL_PERMISSIONS.filter((p) => p !== 'roles.manage'),
+  sales: [
+    'dashboard.view',
+    'orders.view',
+    'orders.create',
+    'orders.edit',
+    'orders.approve',
+    'orders.reject',
+    'orders.price',
+    'orders.print',
+    'products.view',
+    'customers.view',
+    'customers.manage',
+    'projects.view',
+    'reports.view',
+    'notifications.view',
+  ],
+  factory: [
+    'dashboard.view',
+    'orders.view',
+    'orders.production',
+    'products.view',
+    'inventory.manage',
+    'notifications.view',
+  ],
+  warehouse: [
+    'dashboard.view',
+    'orders.view',
+    'products.view',
+    'accessories.manage',
+    'inventory.manage',
+    'notifications.view',
+  ],
+  support: [
+    'dashboard.view',
+    'orders.view',
+    'orders.edit',
+    'customers.view',
+    'customers.manage',
+    'notifications.view',
+    'notifications.manage',
+  ],
+};
+
+export const ROUTE_PERMISSIONS: Record<string, Permission> = {
+  '/': 'dashboard.view',
+  '/orders': 'orders.view',
+  '/products': 'products.view',
+  '/categories': 'categories.manage',
+  '/variants': 'variants.manage',
+  '/glass-types': 'glass.manage',
+  '/accessories': 'accessories.manage',
+  '/services': 'services.manage',
+  '/customers': 'customers.view',
+  '/factory': 'orders.production',
+  '/inventory': 'inventory.manage',
+  '/projects': 'projects.view',
+  '/reports': 'reports.view',
+  '/users': 'users.view',
+  '/roles': 'roles.manage',
+  '/notifications': 'notifications.view',
+  '/settings': 'settings.manage',
+};
