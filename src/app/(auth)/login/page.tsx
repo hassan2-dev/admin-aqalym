@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -50,9 +51,15 @@ export default function LoginPage() {
       >
         <Card>
           <CardHeader className="text-center">
-            <CardTitle className="text-3xl font-bold" style={{ color: BRAND.primary }}>
-              {BRAND.nameAr}
-            </CardTitle>
+            <Image
+              src="/logo-full.png"
+              alt={BRAND.nameAr}
+              width={900}
+              height={1204}
+              priority
+              className="mx-auto h-28 w-auto"
+            />
+            <CardTitle className="sr-only">{BRAND.nameAr}</CardTitle>
             <CardDescription className="text-base">{ar.adminPanel}</CardDescription>
           </CardHeader>
           <CardContent>

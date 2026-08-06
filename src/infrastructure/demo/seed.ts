@@ -12,10 +12,12 @@ import type {
   Project,
   Role,
   ServiceItem,
+  SpecCatalog,
   StaffUser,
   Variant,
 } from '@/domain/entities';
 import { DEFAULT_ROLE_PERMISSIONS } from '@/shared/constants/permissions';
+import { mergeProductSpecifications } from '@/shared/lib/product-specs';
 
 const now = new Date().toISOString();
 const daysAgo = (n: number) => new Date(Date.now() - n * 86400000).toISOString();
@@ -72,14 +74,137 @@ export const SEED_CATEGORIES: Category[] = [
   { id: 'cat-shutters', slug: 'shutters', name: 'Shutters', nameAr: 'شترات', description: 'Manual / Electric', descriptionAr: 'يدوي / كهربائي', icon: 'shutter', image: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&q=80', order: 5 },
 ];
 
+export const SEED_CATALOGS: SpecCatalog[] = [
+  {
+    id: 'catalog-doors-thermal',
+    name: 'Thermal Entrance Doors',
+    nameAr: 'أبواب حرارية',
+    description: 'Standard specs for thermal-break entrance doors',
+    descriptionAr: 'مواصفات قياسية لأبواب المدخل بكسر حراري',
+    specifications: [
+      { label: 'نظام الألمنيوم', value: 'كسر حراري ٧٠ مم' },
+      { label: 'العزل', value: 'عزل حراري عالي' },
+      { label: 'الأمان', value: 'قفل متعدد النقاط' },
+    ],
+    createdAt: daysAgo(40),
+    updatedAt: now,
+  },
+  {
+    id: 'catalog-doors-sliding',
+    name: 'Sliding Doors',
+    nameAr: 'أبواب سحاب',
+    description: 'Standard specs for lift-and-slide doors',
+    descriptionAr: 'مواصفات قياسية لأبواب السحاب والرفع',
+    specifications: [
+      { label: 'نظام الألمنيوم', value: 'رفع وسحب' },
+      { label: 'المسار', value: 'ثنائي / ثلاثي' },
+    ],
+    createdAt: daysAgo(40),
+    updatedAt: now,
+  },
+  {
+    id: 'catalog-windows-casement',
+    name: 'Casement Windows',
+    nameAr: 'نوافذ مفصلية',
+    description: 'Standard specs for casement windows',
+    descriptionAr: 'مواصفات قياسية للنوافذ المفصلية',
+    specifications: [
+      { label: 'نظام الألمنيوم', value: 'كسر حراري ٦٠ مم' },
+      { label: 'الفتح', value: 'مفصلي داخلي / خارجي' },
+    ],
+    createdAt: daysAgo(40),
+    updatedAt: now,
+  },
+  {
+    id: 'catalog-windows-sliding',
+    name: 'Sliding Windows',
+    nameAr: 'نوافذ سحاب',
+    description: 'Standard specs for sliding windows',
+    descriptionAr: 'مواصفات قياسية لنوافذ السحاب',
+    specifications: [
+      { label: 'نظام الألمنيوم', value: 'سحاب ٤٥ مم' },
+      { label: 'المسار', value: 'ثنائي' },
+    ],
+    createdAt: daysAgo(40),
+    updatedAt: now,
+  },
+  {
+    id: 'catalog-facades',
+    name: 'Curtain Wall Facades',
+    nameAr: 'واجهات ستارية',
+    description: 'Standard specs for curtain wall systems',
+    descriptionAr: 'مواصفات قياسية لأنظمة الواجهات الستارية',
+    specifications: [
+      { label: 'النظام', value: 'وحدات جاهزة / تركيب ميداني' },
+      { label: 'مقاومة الرياح', value: 'عالية' },
+    ],
+    createdAt: daysAgo(40),
+    updatedAt: now,
+  },
+  {
+    id: 'catalog-fixed-glass',
+    name: 'Fixed Glass Partitions',
+    nameAr: 'زجاج ثابت',
+    description: 'Standard specs for fixed glass partitions',
+    descriptionAr: 'مواصفات قياسية للتقسيمات الزجاجية الثابتة',
+    specifications: [
+      { label: 'السماكة', value: '١٠–١٢ مم' },
+      { label: 'التثبيت', value: 'قناة تثبيت / نقاط عنكبوتية' },
+    ],
+    createdAt: daysAgo(40),
+    updatedAt: now,
+  },
+  {
+    id: 'catalog-shutters',
+    name: 'Roller Shutters',
+    nameAr: 'شترات لفّافة',
+    description: 'Standard specs for roller shutters',
+    descriptionAr: 'مواصفات قياسية للشترات اللفّافة',
+    specifications: [
+      { label: 'المادة', value: 'ألمنيوم مقوّى' },
+      { label: 'التشغيل', value: 'يدوي / كهربائي' },
+    ],
+    createdAt: daysAgo(40),
+    updatedAt: now,
+  },
+  {
+    id: 'catalog-ready-hardware',
+    name: 'Ready Hardware',
+    nameAr: 'إكسسوارات جاهزة',
+    description: 'Standard specs for ready-made hardware SKUs',
+    descriptionAr: 'مواصفات قياسية للمنتجات الجاهزة من الإكسسوارات',
+    specifications: [
+      { label: 'النوع', value: 'طقم كامل (يد + وردة)' },
+      { label: 'المادة', value: 'ألمنيوم مطلي' },
+      { label: 'التوافق', value: 'أبواب ألمنيوم قياسية' },
+    ],
+    createdAt: daysAgo(40),
+    updatedAt: now,
+  },
+];
+
 const colors = [
   { id: 'ral9016', name: 'White', nameAr: 'أبيض', hex: '#F6F6F6' },
   { id: 'ral7016', name: 'Anthracite', nameAr: 'رمادي أنثراسايت', hex: '#383E42' },
   { id: 'ral9005', name: 'Black', nameAr: 'أسود', hex: '#0A0A0A' },
 ];
 
+function productWithCatalog(
+  catalogId: string,
+  extraSpecifications: Product['extraSpecifications'],
+  base: Omit<Product, 'catalogId' | 'extraSpecifications' | 'specifications'>
+): Product {
+  const catalog = SEED_CATALOGS.find((c) => c.id === catalogId);
+  return {
+    ...base,
+    catalogId,
+    extraSpecifications,
+    specifications: mergeProductSpecifications(catalog, extraSpecifications),
+  };
+}
+
 export const SEED_PRODUCTS: Product[] = [
-  {
+  productWithCatalog('catalog-doors-thermal', [], {
     id: 'prod-door-pivot',
     categoryId: 'cat-doors',
     categorySlug: 'doors',
@@ -94,10 +219,6 @@ export const SEED_PRODUCTS: Product[] = [
     minimumHeight: 200,
     maximumHeight: 280,
     estimatedPrice: 1850000,
-    specifications: [
-      { label: 'نظام الألمنيوم', value: 'كسر حراري ٧٠ مم' },
-      { label: 'العزل', value: 'عزل حراري عالي' },
-    ],
     variants: ['محوري يمين', 'محوري يسار'],
     glassTypes: ['glass-clear', 'glass-double'],
     accessories: ['acc-handle-premium', 'acc-lock-multipoint'],
@@ -105,8 +226,8 @@ export const SEED_PRODUCTS: Product[] = [
     featured: true,
     createdAt: daysAgo(30),
     updatedAt: now,
-  },
-  {
+  }),
+  productWithCatalog('catalog-windows-casement', [], {
     id: 'prod-win-casement',
     categoryId: 'cat-windows',
     categorySlug: 'windows',
@@ -121,7 +242,6 @@ export const SEED_PRODUCTS: Product[] = [
     minimumHeight: 40,
     maximumHeight: 180,
     estimatedPrice: 420000,
-    specifications: [{ label: 'نظام الألمنيوم', value: 'كسر حراري ٦٠ مم' }],
     variants: ['ضلفة واحدة', 'ضفلتين'],
     glassTypes: ['glass-clear', 'glass-double', 'glass-reflective'],
     accessories: ['acc-mosquito'],
@@ -129,8 +249,8 @@ export const SEED_PRODUCTS: Product[] = [
     featured: true,
     createdAt: daysAgo(25),
     updatedAt: now,
-  },
-  {
+  }),
+  productWithCatalog('catalog-facades', [], {
     id: 'prod-facade-cw',
     categoryId: 'cat-facades',
     categorySlug: 'facades',
@@ -145,7 +265,6 @@ export const SEED_PRODUCTS: Product[] = [
     minimumHeight: 100,
     maximumHeight: 500,
     estimatedPrice: 950000,
-    specifications: [{ label: 'النظام', value: 'وحدات جاهزة / تركيب ميداني' }],
     variants: ['تركيب ميداني', 'وحدات جاهزة'],
     glassTypes: ['glass-double', 'glass-reflective'],
     accessories: [],
@@ -153,8 +272,8 @@ export const SEED_PRODUCTS: Product[] = [
     featured: true,
     createdAt: daysAgo(20),
     updatedAt: now,
-  },
-  {
+  }),
+  productWithCatalog('catalog-shutters', [{ label: 'ملاحظة', value: 'محرك كهربائي مدمج' }], {
     id: 'prod-shutter-electric',
     categoryId: 'cat-shutters',
     categorySlug: 'shutters',
@@ -169,7 +288,6 @@ export const SEED_PRODUCTS: Product[] = [
     minimumHeight: 100,
     maximumHeight: 350,
     estimatedPrice: 750000,
-    specifications: [{ label: 'التشغيل', value: 'محرك كهربائي' }],
     variants: ['يدوي', 'كهربائي'],
     glassTypes: [],
     accessories: ['acc-motor'],
@@ -177,7 +295,7 @@ export const SEED_PRODUCTS: Product[] = [
     featured: false,
     createdAt: daysAgo(15),
     updatedAt: now,
-  },
+  }),
 ];
 
 export const SEED_VARIANTS: Variant[] = [

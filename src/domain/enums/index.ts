@@ -38,6 +38,7 @@ export type Permission =
   | 'products.view'
   | 'products.manage'
   | 'categories.manage'
+  | 'catalogs.manage'
   | 'variants.manage'
   | 'glass.manage'
   | 'accessories.manage'
@@ -68,6 +69,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   'products.view',
   'products.manage',
   'categories.manage',
+  'catalogs.manage',
   'variants.manage',
   'glass.manage',
   'accessories.manage',

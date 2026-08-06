@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "npx tsx scripts/seed-admin.ts",
+    "seed:firebase": "npx tsx scripts/seed-firebase.ts",
+    "firebase:setup": "npx tsx scripts/firebase-setup.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -52,7 +54,9 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "15.5.22",
+    "firebase-admin": "^14.2.0",
     "tailwindcss": "^4",
+    "tsx": "^4.23.9",
     "typescript": "^5"
   }
 }

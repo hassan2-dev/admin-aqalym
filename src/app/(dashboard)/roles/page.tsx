@@ -25,6 +25,7 @@ const PERMISSION_LABELS: Record<Permission, string> = {
   'products.view': 'عرض المنتجات',
   'products.manage': 'إدارة المنتجات',
   'categories.manage': 'إدارة التصنيفات',
+  'catalogs.manage': 'إدارة كتالوجات المواصفات',
   'variants.manage': 'إدارة المتغيرات',
   'glass.manage': 'إدارة الزجاج',
   'accessories.manage': 'إدارة الإكسسوارات',

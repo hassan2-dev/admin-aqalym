@@ -16,14 +16,17 @@ import type {
   Project,
   Role,
   ServiceItem,
+  SpecCatalog,
   StaffUser,
   Variant,
 } from '@/domain/entities';
 import type { OrderStatus, Permission } from '@/domain/enums';
 import { ORDER_STATUS_LABELS } from '@/domain/enums';
 import { generateId } from '@/shared/lib/utils';
+import { mergeProductSpecifications } from '@/shared/lib/product-specs';
 import {
   SEED_ACCESSORIES,
+  SEED_CATALOGS,
   SEED_CATEGORIES,
   SEED_CUSTOMERS,
   SEED_GLASS,
@@ -40,9 +43,10 @@ import {
   SEED_VARIANTS,
 } from '@/infrastructure/demo/seed';
 
-const STORAGE_KEY = 'aqalym-admin-demo-v2';
+const STORAGE_KEY = 'aqalym-admin-demo-v3';
 
 export interface DemoState {
+  catalogs: SpecCatalog[];
   categories: Category[];
   products: Product[];
   variants: Variant[];
@@ -65,6 +69,7 @@ export interface DemoState {
 
 function initialState(): DemoState {
   return {
+    catalogs: structuredClone(SEED_CATALOGS),
     categories: structuredClone(SEED_CATEGORIES),
     products: structuredClone(SEED_PRODUCTS),
     variants: structuredClone(SEED_VARIANTS),
@@ -265,12 +270,33 @@ export const demoDb = {
     const now = new Date().toISOString();
     let id = input.id;
     mutate((s) => {
+      const catalogId = input.catalogId !== undefined ? input.catalogId : undefined;
+      const extras =
+        input.extraSpecifications !== undefined ? input.extraSpecifications : undefined;
       if (id) {
         const idx = s.products.findIndex((p) => p.id === id);
-        if (idx >= 0) s.products[idx] = { ...s.products[idx]!, ...input, updatedAt: now } as Product;
+        if (idx >= 0) {
+          const prev = s.products[idx]!;
+          const nextCatalogId = catalogId !== undefined ? catalogId : prev.catalogId;
+          const nextExtras = extras !== undefined ? extras : prev.extraSpecifications ?? [];
+          const catalog = s.catalogs.find((c) => c.id === nextCatalogId);
+          s.products[idx] = {
+            ...prev,
+            ...input,
+            catalogId: nextCatalogId ?? null,
+            extraSpecifications: nextExtras,
+            specifications:
+              input.specifications ??
+              mergeProductSpecifications(catalog, nextExtras),
+            updatedAt: now,
+          } as Product;
+        }
       } else {
         id = generateId('prod');
         const cat = s.categories.find((c) => c.id === input.categoryId);
+        const nextCatalogId = catalogId ?? null;
+        const nextExtras = extras ?? [];
+        const catalog = s.catalogs.find((c) => c.id === nextCatalogId);
         s.products.unshift({
           id,
           categoryId: input.categoryId,
@@ -286,7 +312,10 @@ export const demoDb = {
           minimumHeight: input.minimumHeight ?? 50,
           maximumHeight: input.maximumHeight ?? 300,
           estimatedPrice: input.estimatedPrice ?? 0,
-          specifications: input.specifications ?? [],
+          catalogId: nextCatalogId,
+          extraSpecifications: nextExtras,
+          specifications:
+            input.specifications ?? mergeProductSpecifications(catalog, nextExtras),
           variants: input.variants ?? [],
           glassTypes: input.glassTypes ?? [],
           accessories: input.accessories ?? [],
@@ -303,6 +332,53 @@ export const demoDb = {
     mutate((s) => {
       s.products = s.products.filter((p) => p.id !== id);
       s.variants = s.variants.filter((v) => v.productId !== id);
+    });
+  },
+
+  async saveCatalog(input: Partial<SpecCatalog> & Pick<SpecCatalog, 'nameAr'>) {
+    const now = new Date().toISOString();
+    let id = input.id;
+    mutate((s) => {
+      if (id) {
+        const idx = s.catalogs.findIndex((c) => c.id === id);
+        if (idx >= 0) {
+          const next = {
+            ...s.catalogs[idx]!,
+            ...input,
+            updatedAt: now,
+          } as SpecCatalog;
+          s.catalogs[idx] = next;
+          // Refresh denormalized product specs for linked products
+          s.products = s.products.map((p) => {
+            if (p.catalogId !== id) return p;
+            return {
+              ...p,
+              specifications: mergeProductSpecifications(next, p.extraSpecifications ?? []),
+              updatedAt: now,
+            };
+          });
+        }
+      } else {
+        id = generateId('catalog');
+        s.catalogs.unshift({
+          id,
+          name: input.name ?? input.nameAr,
+          nameAr: input.nameAr,
+          description: input.description ?? '',
+          descriptionAr: input.descriptionAr ?? '',
+          specifications: input.specifications ?? [],
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+    });
+    return load().catalogs.find((c) => c.id === id)!;
+  },
+  async deleteCatalog(id: string) {
+    mutate((s) => {
+      const linked = s.products.some((p) => p.catalogId === id);
+      if (linked) throw new Error('لا يمكن حذف كتالوج مرتبط بمنتجات');
+      s.catalogs = s.catalogs.filter((c) => c.id !== id);
     });
   },
 

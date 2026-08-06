@@ -1,12 +1,14 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   ShoppingCart,
   Package,
+  BookOpen,
   Folders,
   Layers,
   Droplets,
@@ -64,6 +66,7 @@ const navGroups: NavGroup[] = [
     label: ar.navCatalog,
     collapsible: true,
     items: [
+      { href: '/catalogs', label: ar.catalogs, icon: BookOpen, permission: 'catalogs.manage' },
       { href: '/categories', label: ar.categories, icon: Folders, permission: 'categories.manage' },
       { href: '/variants', label: ar.variants, icon: Layers, permission: 'variants.manage' },
       { href: '/glass-types', label: ar.glassTypes, icon: Droplets, permission: 'glass.manage' },
@@ -118,9 +121,14 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
       >
         <div className="flex items-center justify-between gap-3 px-5 py-5">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/20 text-accent">
-              <Building2 className="h-5 w-5" />
-            </div>
+            <Image
+              src="/logo-mark.svg"
+              alt={BRAND.nameAr}
+              width={40}
+              height={40}
+              priority
+              className="h-10 w-10 rounded-xl shadow-sm ring-1 ring-white/10"
+            />
             <div>
               <p className="text-base font-bold tracking-tight text-white">{BRAND.name}</p>
               <p className="text-[11px] text-sidebar-muted">{BRAND.tagline}</p>

@@ -71,6 +71,11 @@ export function useCategories() {
   return useQuery({ queryKey: ['categories'], queryFn: () => dataService.listCategories() });
 }
 
+export function useCatalogs() {
+  useDemoInvalidate();
+  return useQuery({ queryKey: ['catalogs'], queryFn: () => dataService.listCatalogs() });
+}
+
 export function useVariants() {
   useDemoInvalidate();
   return useQuery({ queryKey: ['variants'], queryFn: () => dataService.listVariants() });

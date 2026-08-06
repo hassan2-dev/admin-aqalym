@@ -8,6 +8,7 @@ export const loginSchema = z.object({
 export const productSchema = z.object({
   nameAr: z.string().min(2),
   categoryId: z.string().min(1),
+  catalogId: z.string().min(1),
   estimatedPrice: z.coerce.number().min(0),
   minimumWidth: z.coerce.number().positive(),
   maximumWidth: z.coerce.number().positive(),

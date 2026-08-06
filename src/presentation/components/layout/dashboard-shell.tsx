@@ -14,6 +14,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/orders': ar.orders,
   '/products': ar.products,
   '/categories': ar.categories,
+  '/catalogs': ar.catalogs,
   '/variants': ar.variants,
   '/glass-types': ar.glassTypes,
   '/accessories': ar.accessories,

@@ -56,6 +56,18 @@ export interface Category {
   order: number;
 }
 
+/** Global reusable specification template managed by admin. */
+export interface SpecCatalog {
+  id: string;
+  name: string;
+  nameAr: string;
+  description: string;
+  descriptionAr: string;
+  specifications: ProductSpec[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Product {
   id: string;
   categoryId: string;
@@ -71,6 +83,11 @@ export interface Product {
   minimumHeight: number;
   maximumHeight: number;
   estimatedPrice: number;
+  /** Inherited catalog reference; catalog specs stay fixed and reusable. */
+  catalogId: string | null;
+  /** Product-only additions; never mutate the linked catalog. */
+  extraSpecifications: ProductSpec[];
+  /** Denormalized catalog specs + extras for mobile/compat display. */
   specifications: ProductSpec[];
   variants: string[];
   glassTypes: string[];

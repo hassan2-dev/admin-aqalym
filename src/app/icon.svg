@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="AQALYM">
+  <defs>
+    <linearGradient id="aqSilver" x1="21" y1="482" x2="276" y2="10" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8F959C" />
+      <stop offset=".45" stop-color="#D2D6DB" />
+      <stop offset="1" stop-color="#9BA2AA" />
+    </linearGradient>
+    <linearGradient id="aqSilverLeg" x1="241" y1="451" x2="276" y2="112" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#9AA1A8" />
+      <stop offset="1" stop-color="#C9CDD3" />
+    </linearGradient>
+    <linearGradient id="aqTail" x1="362" y1="401" x2="495" y2="502" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#CFD3D8" />
+      <stop offset="1" stop-color="#7F858D" />
+    </linearGradient>
+    <linearGradient id="aqGold" x1="111" y1="264" x2="141" y2="483" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E2BB8A" />
+      <stop offset="1" stop-color="#B5814F" />
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="104" fill="#FFFFFF" />
+
+  <g transform="translate(63.3 65.5) scale(0.747)">
+    <path fill="url(#aqSilver)" d="M276 10v73L69 300v182H21V266Z" />
+    <path fill="url(#aqSilver)" d="M249 118h9L87 300v183H76V300Z" />
+    <rect x="111" y="264" width="30" height="219" fill="url(#aqGold)" />
+    <rect x="244" y="112" width="32" height="339" fill="url(#aqSilverLeg)" />
+
+    <path fill="#1E275E" fill-rule="evenodd" d="M284 172h186v310H284Zm12 42v226h132V214Z" />
+    <path fill="#2C3773" d="M429 213 470 172v41Z" />
+    <path fill="#B9BEC5" d="M284 223h137v207h-8V231H296v199h-12Z" />
+    <path fill="url(#aqTail)" d="m362 433 32-32 101 101h-64Z" />
+  </g>
+</svg>

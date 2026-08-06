@@ -27,6 +27,7 @@ import type {
   Project,
   Role,
   ServiceItem,
+  SpecCatalog,
   StaffUser,
   Variant,
 } from '@/domain/entities';
@@ -141,6 +142,43 @@ export const dataService = {
     if (isDemoMode) return demoDb.deleteProduct(id);
     const db = getFirebaseDb();
     if (db) await deleteDoc(doc(db, 'products', id));
+  },
+
+  async listCatalogs() {
+    if (isDemoMode) return getDemoState().catalogs;
+    return listCollection<SpecCatalog>('catalogs');
+  },
+  saveCatalog: (input: Parameters<typeof demoDb.saveCatalog>[0]) =>
+    isDemoMode
+      ? demoDb.saveCatalog(input)
+      : demoDb.saveCatalog(input).then(async (c) => {
+          await upsertDoc('catalogs', c);
+          // Keep linked product denormalized specs in sync
+          const products = await listCollection<Product>('products');
+          await Promise.all(
+            products
+              .filter((p) => p.catalogId === c.id)
+              .map((p) =>
+                upsertDoc('products', {
+                  ...p,
+                  specifications: [
+                    ...(c.specifications ?? []),
+                    ...(p.extraSpecifications ?? []),
+                  ],
+                  updatedAt: new Date().toISOString(),
+                })
+              )
+          );
+          return c;
+        }),
+  deleteCatalog: async (id: string) => {
+    if (isDemoMode) return demoDb.deleteCatalog(id);
+    const products = await listCollection<Product>('products');
+    if (products.some((p) => p.catalogId === id)) {
+      throw new Error('لا يمكن حذف كتالوج مرتبط بمنتجات');
+    }
+    const db = getFirebaseDb();
+    if (db) await deleteDoc(doc(db, 'catalogs', id));
   },
 
   async listCategories() {

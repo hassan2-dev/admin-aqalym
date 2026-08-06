@@ -14,17 +14,78 @@ import { Label } from '@/presentation/components/ui/label';
 import { Textarea } from '@/presentation/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/presentation/components/ui/dialog';
 import { Skeleton } from '@/presentation/components/ui/skeleton';
-import { useAccessories, useCategories, useCrudMutation, useGlass, useProducts } from '@/presentation/hooks/use-data';
+import {
+  useAccessories,
+  useCatalogs,
+  useCategories,
+  useCrudMutation,
+  useGlass,
+  useProducts,
+} from '@/presentation/hooks/use-data';
 import { dataService } from '@/infrastructure/repositories/data-service';
-import type { Product } from '@/domain/entities';
+import type { Product, ProductColor, ProductSpec } from '@/domain/entities';
 import { formatCurrency } from '@/shared/lib/utils';
 import { useAuth } from '@/presentation/providers/auth-provider';
 import { cn } from '@/shared/lib/utils';
+
+const DEFAULT_COLORS: ProductColor[] = [
+  { id: 'ral9016', name: 'White', nameAr: 'أبيض', hex: '#F6F6F6' },
+  { id: 'ral7016', name: 'Anthracite', nameAr: 'رمادي أنثراسايت', hex: '#383E42' },
+  { id: 'ral9005', name: 'Black', nameAr: 'أسود', hex: '#0A0A0A' },
+  { id: 'ral8014', name: 'Brown', nameAr: 'بني', hex: '#4A3526' },
+];
+
+type FormState = {
+  nameAr: string;
+  name: string;
+  categoryId: string;
+  catalogId: string;
+  kind: 'ready' | 'custom';
+  estimatedPrice: string;
+  minimumWidth: string;
+  maximumWidth: string;
+  minimumHeight: string;
+  maximumHeight: string;
+  descriptionAr: string;
+  images: string;
+  variantsText: string;
+  featured: boolean;
+  glassTypes: string[];
+  accessories: string[];
+  colorIds: string[];
+  extras: ProductSpec[];
+};
+
+const emptyExtra = (): ProductSpec => ({ label: '', value: '' });
+
+function blankForm(categoryId: string, catalogId: string): FormState {
+  return {
+    nameAr: '',
+    name: '',
+    categoryId,
+    catalogId,
+    kind: 'custom',
+    estimatedPrice: '',
+    minimumWidth: '50',
+    maximumWidth: '300',
+    minimumHeight: '50',
+    maximumHeight: '300',
+    descriptionAr: '',
+    images: '',
+    variantsText: '',
+    featured: false,
+    glassTypes: [],
+    accessories: [],
+    colorIds: DEFAULT_COLORS.slice(0, 3).map((c) => c.id),
+    extras: [],
+  };
+}
 
 export default function ProductsPage() {
   const { can } = useAuth();
   const { data, isLoading, isError, refetch } = useProducts();
   const categories = useCategories();
+  const catalogs = useCatalogs();
   const glass = useGlass();
   const accessories = useAccessories();
   const save = useCrudMutation(['products'], (args: Parameters<typeof dataService.saveProduct>[0]) =>
@@ -34,28 +95,28 @@ export default function ProductsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Product | undefined>();
-  const [form, setForm] = useState<Record<string, string>>({});
+  const [form, setForm] = useState<FormState>(() => blankForm('', ''));
 
   const selected = useMemo(
     () => data?.find((p) => p.id === selectedId) ?? data?.[0],
     [data, selectedId]
   );
 
+  const selectedCatalog = useMemo(
+    () => catalogs.data?.find((c) => c.id === form.catalogId),
+    [catalogs.data, form.catalogId]
+  );
+
+  const detailCatalog = useMemo(
+    () => catalogs.data?.find((c) => c.id === selected?.catalogId),
+    [catalogs.data, selected?.catalogId]
+  );
+
   function openCreate() {
     setEditing(undefined);
-    setForm({
-      nameAr: '',
-      name: '',
-      categoryId: categories.data?.[0]?.id ?? '',
-      kind: 'custom',
-      estimatedPrice: '',
-      minimumWidth: '50',
-      maximumWidth: '300',
-      minimumHeight: '50',
-      maximumHeight: '300',
-      descriptionAr: '',
-      images: '',
-    });
+    setForm(
+      blankForm(categories.data?.[0]?.id ?? '', catalogs.data?.[0]?.id ?? '')
+    );
     setOpen(true);
   }
 
@@ -65,6 +126,7 @@ export default function ProductsPage() {
       nameAr: p.nameAr,
       name: p.name,
       categoryId: p.categoryId,
+      catalogId: p.catalogId ?? '',
       kind: p.kind,
       estimatedPrice: String(p.estimatedPrice),
       minimumWidth: String(p.minimumWidth),
@@ -73,19 +135,41 @@ export default function ProductsPage() {
       maximumHeight: String(p.maximumHeight),
       descriptionAr: p.descriptionAr,
       images: p.images[0] ?? '',
+      variantsText: (p.variants ?? []).join('\n'),
+      featured: !!p.featured,
+      glassTypes: [...(p.glassTypes ?? [])],
+      accessories: [...(p.accessories ?? [])],
+      colorIds: (p.colors?.length ? p.colors : DEFAULT_COLORS.slice(0, 3)).map((c) => c.id),
+      extras: (p.extraSpecifications ?? []).map((s) => ({ ...s })),
     });
     setOpen(true);
   }
 
+  function toggleId(list: string[], id: string) {
+    return list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!form.catalogId) {
+      toast.error('اختر كتالوج المواصفات');
+      return;
+    }
+    const extras = form.extras.filter((s) => s.label.trim() && s.value.trim());
+    const colors = DEFAULT_COLORS.filter((c) => form.colorIds.includes(c.id));
+    const variants = form.variantsText
+      .split('\n')
+      .map((v) => v.trim())
+      .filter(Boolean);
+
     try {
       const saved = await save.mutateAsync({
         id: editing?.id,
-        nameAr: form.nameAr!,
-        name: form.name || form.nameAr!,
-        categoryId: form.categoryId!,
-        kind: (form.kind as 'ready' | 'custom') || 'custom',
+        nameAr: form.nameAr,
+        name: form.name || form.nameAr,
+        categoryId: form.categoryId,
+        catalogId: form.catalogId,
+        kind: form.kind,
         estimatedPrice: Number(form.estimatedPrice || 0),
         minimumWidth: Number(form.minimumWidth || 50),
         maximumWidth: Number(form.maximumWidth || 300),
@@ -94,6 +178,12 @@ export default function ProductsPage() {
         descriptionAr: form.descriptionAr,
         description: form.descriptionAr,
         images: form.images ? [form.images] : editing?.images ?? [],
+        extraSpecifications: extras,
+        variants,
+        glassTypes: form.glassTypes,
+        accessories: form.accessories,
+        colors,
+        featured: form.featured,
       });
       setSelectedId(saved.id);
       toast.success(editing ? 'تم التحديث بنجاح' : 'تم الإنشاء بنجاح');
@@ -123,7 +213,7 @@ export default function ProductsPage() {
     <div className="space-y-6">
       <PageHeader
         title="المنتجات والأنظمة"
-        description="كتالوج الأنظمة المعمارية وقواعد القياس والتسعير"
+        description="كل منتج يختار كتالوج مواصفات قياسي ثم يضبط خياراته الخاصة"
         actions={
           can('products.manage') ? (
             <Button variant="accent" onClick={openCreate}>
@@ -136,11 +226,11 @@ export default function ProductsPage() {
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard title="إجمالي المنتجات" value={data?.length ?? 0} icon={Package} trend="+5% هذا الشهر" trendTone="success" />
         <StatCard
-          title="أنواع الزجاج المتاحة"
-          value={glass.data?.length ?? 0}
+          title="كتالوجات المواصفات"
+          value={catalogs.data?.length ?? 0}
           icon={Package}
-          badge="يتطلب مراجعة"
-          badgeTone="warning"
+          badge="قوالب مشتركة"
+          badgeTone="info"
         />
         <StatCard
           title="تصنيفات الأنظمة"
@@ -175,6 +265,7 @@ export default function ProductsPage() {
             ) : null}
             {data.map((p) => {
               const active = selected?.id === p.id;
+              const catName = catalogs.data?.find((c) => c.id === p.catalogId)?.nameAr;
               return (
                 <button
                   key={p.id}
@@ -199,7 +290,9 @@ export default function ProductsPage() {
                       {p.kind === 'ready' ? 'جاهز' : 'مخصص'}
                     </span>
                   </div>
-                  <p className="line-clamp-2 text-xs text-muted-foreground">{p.descriptionAr || '—'}</p>
+                  <p className="line-clamp-1 text-xs text-muted-foreground">
+                    {catName ? `كتالوج: ${catName}` : 'بدون كتالوج'}
+                  </p>
                   <p className="mt-3 text-sm font-bold text-primary">
                     يبدأ من {formatCurrency(p.estimatedPrice)}
                   </p>
@@ -212,31 +305,59 @@ export default function ProductsPage() {
 
       {selected ? (
         <div className="grid gap-4 xl:grid-cols-3">
-          <SectionCard title="أنواع الزجاج المتاحة">
+          <SectionCard title="الميزات القياسية (من الكتالوج)">
+            <p className="mb-3 text-xs text-muted-foreground">
+              {detailCatalog?.nameAr ?? 'غير مرتبط بكتالوج'}
+            </p>
             <div className="space-y-2">
-              {(glass.data ?? []).slice(0, 5).map((g) => {
-                const checked = selected.glassTypes.includes(g.id);
-                return (
-                  <label
-                    key={g.id}
-                    className="flex items-center justify-between rounded-xl border border-border px-3 py-2 text-sm"
-                  >
-                    <span>{g.nameAr}</span>
-                    <input type="checkbox" checked={checked} readOnly />
-                  </label>
-                );
-              })}
+              {(detailCatalog?.specifications ?? []).map((s, i) => (
+                <div
+                  key={`${s.label}-${i}`}
+                  className="flex justify-between rounded-xl border border-border px-3 py-2 text-sm"
+                >
+                  <span>{s.label}</span>
+                  <span className="text-muted-foreground">{s.value}</span>
+                </div>
+              ))}
+              {(selected.extraSpecifications ?? []).map((s, i) => (
+                <div
+                  key={`extra-${s.label}-${i}`}
+                  className="flex justify-between rounded-xl border border-dashed border-accent/40 bg-accent/5 px-3 py-2 text-sm"
+                >
+                  <span>{s.label}</span>
+                  <span className="text-muted-foreground">{s.value}</span>
+                </div>
+              ))}
+              {!detailCatalog?.specifications?.length && !(selected.extraSpecifications ?? []).length ? (
+                <p className="text-sm text-muted-foreground">لا توجد مواصفات</p>
+              ) : null}
             </div>
           </SectionCard>
 
-          <SectionCard title="الإكسسوارات والمرفقات">
-            <div className="grid gap-2 sm:grid-cols-2">
-              {(accessories.data ?? []).slice(0, 4).map((a) => (
-                <div key={a.id} className="rounded-xl border border-border p-3 text-sm">
-                  <p className="font-medium">{a.nameAr}</p>
-                  <p className="text-xs text-muted-foreground">{formatCurrency(a.price)}</p>
-                </div>
-              ))}
+          <SectionCard title="خيارات المنتج">
+            <div className="space-y-3 text-sm">
+              <div>
+                <p className="mb-1 text-xs text-muted-foreground">الزجاج المتوافق</p>
+                <p>
+                  {(glass.data ?? [])
+                    .filter((g) => selected.glassTypes.includes(g.id))
+                    .map((g) => g.nameAr)
+                    .join(' · ') || '—'}
+                </p>
+              </div>
+              <div>
+                <p className="mb-1 text-xs text-muted-foreground">الإكسسوارات</p>
+                <p>
+                  {(accessories.data ?? [])
+                    .filter((a) => selected.accessories.includes(a.id))
+                    .map((a) => a.nameAr)
+                    .join(' · ') || '—'}
+                </p>
+              </div>
+              <div>
+                <p className="mb-1 text-xs text-muted-foreground">المتغيرات</p>
+                <p>{selected.variants.join(' · ') || '—'}</p>
+              </div>
             </div>
           </SectionCard>
 
@@ -270,10 +391,7 @@ export default function ProductsPage() {
             <div className="mt-4">
               <p className="mb-2 text-xs font-medium text-muted-foreground">الألوان المتاحة</p>
               <div className="space-y-2">
-                {(selected.colors.length
-                  ? selected.colors
-                  : [{ id: 'c1', name: 'White', nameAr: 'أبيض', hex: '#FFFFFF' }]
-                ).map((c) => (
+                {(selected.colors.length ? selected.colors : DEFAULT_COLORS.slice(0, 1)).map((c) => (
                   <div
                     key={c.id}
                     className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
@@ -295,54 +413,285 @@ export default function ProductsPage() {
       ) : null}
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{editing ? 'تعديل منتج' : 'إضافة منتج'}</DialogTitle>
           </DialogHeader>
-          <form className="space-y-3" onSubmit={submit}>
-            {[
-              ['nameAr', 'الاسم بالعربي'],
-              ['name', 'الاسم بالإنجليزي'],
-              ['estimatedPrice', 'السعر التقديري'],
-              ['minimumWidth', 'أقل عرض'],
-              ['maximumWidth', 'أعلى عرض'],
-              ['minimumHeight', 'أقل ارتفاع'],
-              ['maximumHeight', 'أعلى ارتفاع'],
-              ['images', 'رابط الصورة'],
-            ].map(([name, label]) => (
-              <div key={name}>
-                <Label>{label}</Label>
+          <form className="space-y-4" onSubmit={submit}>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label>الاسم بالعربي</Label>
                 <Input
                   className="mt-1"
-                  value={form[name] ?? ''}
-                  onChange={(e) => setForm((f) => ({ ...f, [name]: e.target.value }))}
-                  required={name === 'nameAr' || name === 'estimatedPrice'}
+                  value={form.nameAr}
+                  onChange={(e) => setForm((f) => ({ ...f, nameAr: e.target.value }))}
+                  required
                 />
               </div>
-            ))}
-            <div>
-              <Label>التصنيف</Label>
-              <select
-                className="mt-1 flex h-10 w-full rounded-xl border border-input bg-card px-3 text-sm"
-                value={form.categoryId ?? ''}
-                onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))}
-                required
-              >
-                {(categories.data ?? []).map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nameAr}
-                  </option>
-                ))}
-              </select>
+              <div>
+                <Label>الاسم بالإنجليزي</Label>
+                <Input
+                  className="mt-1"
+                  value={form.name}
+                  onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                />
+              </div>
             </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label>التصنيف</Label>
+                <select
+                  className="mt-1 flex h-10 w-full rounded-xl border border-input bg-card px-3 text-sm"
+                  value={form.categoryId}
+                  onChange={(e) => setForm((f) => ({ ...f, categoryId: e.target.value }))}
+                  required
+                >
+                  {(categories.data ?? []).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nameAr}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label>كتالوج المواصفات *</Label>
+                <select
+                  className="mt-1 flex h-10 w-full rounded-xl border border-input bg-card px-3 text-sm"
+                  value={form.catalogId}
+                  onChange={(e) => setForm((f) => ({ ...f, catalogId: e.target.value }))}
+                  required
+                >
+                  <option value="">اختر كتالوج…</option>
+                  {(catalogs.data ?? []).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nameAr}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {selectedCatalog ? (
+              <div className="rounded-xl border border-border bg-muted/20 p-3">
+                <p className="mb-2 text-xs font-medium text-muted-foreground">
+                  ميزات موروثة من «{selectedCatalog.nameAr}» (للقراءة فقط)
+                </p>
+                <div className="space-y-1">
+                  {selectedCatalog.specifications.map((s, i) => (
+                    <div key={i} className="flex justify-between text-sm">
+                      <span>{s.label}</span>
+                      <span className="text-muted-foreground">{s.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>مواصفات إضافية خاصة بالمنتج</Label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setForm((f) => ({ ...f, extras: [...f.extras, emptyExtra()] }))}
+                >
+                  <Plus className="h-3.5 w-3.5" /> إضافة
+                </Button>
+              </div>
+              {form.extras.map((s, i) => (
+                <div key={i} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                  <Input
+                    placeholder="الحقل"
+                    value={s.label}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        extras: f.extras.map((row, idx) =>
+                          idx === i ? { ...row, label: e.target.value } : row
+                        ),
+                      }))
+                    }
+                  />
+                  <Input
+                    placeholder="القيمة"
+                    value={s.value}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        extras: f.extras.map((row, idx) =>
+                          idx === i ? { ...row, value: e.target.value } : row
+                        ),
+                      }))
+                    }
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    onClick={() =>
+                      setForm((f) => ({ ...f, extras: f.extras.filter((_, idx) => idx !== i) }))
+                    }
+                  >
+                    <Trash2 className="h-4 w-4 text-destructive" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div>
+                <Label>النوع</Label>
+                <select
+                  className="mt-1 flex h-10 w-full rounded-xl border border-input bg-card px-3 text-sm"
+                  value={form.kind}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, kind: e.target.value as 'ready' | 'custom' }))
+                  }
+                >
+                  <option value="custom">مخصص</option>
+                  <option value="ready">جاهز</option>
+                </select>
+              </div>
+              <div>
+                <Label>السعر التقديري</Label>
+                <Input
+                  className="mt-1"
+                  value={form.estimatedPrice}
+                  onChange={(e) => setForm((f) => ({ ...f, estimatedPrice: e.target.value }))}
+                  required
+                />
+              </div>
+              <div className="flex items-end">
+                <label className="flex h-10 items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={form.featured}
+                    onChange={(e) => setForm((f) => ({ ...f, featured: e.target.checked }))}
+                  />
+                  منتج مميز
+                </label>
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-4">
+              {(
+                [
+                  ['minimumWidth', 'أقل عرض'],
+                  ['maximumWidth', 'أعلى عرض'],
+                  ['minimumHeight', 'أقل ارتفاع'],
+                  ['maximumHeight', 'أعلى ارتفاع'],
+                ] as const
+              ).map(([key, label]) => (
+                <div key={key}>
+                  <Label>{label}</Label>
+                  <Input
+                    className="mt-1"
+                    value={form[key]}
+                    onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div>
+              <Label>رابط الصورة</Label>
+              <Input
+                className="mt-1"
+                value={form.images}
+                onChange={(e) => setForm((f) => ({ ...f, images: e.target.value }))}
+              />
+            </div>
+
             <div>
               <Label>الوصف</Label>
               <Textarea
                 className="mt-1"
-                value={form.descriptionAr ?? ''}
+                value={form.descriptionAr}
                 onChange={(e) => setForm((f) => ({ ...f, descriptionAr: e.target.value }))}
               />
             </div>
+
+            <div>
+              <Label>المتغيرات (سطر لكل خيار)</Label>
+              <Textarea
+                className="mt-1"
+                placeholder={'محوري يمين\nمحوري يسار'}
+                value={form.variantsText}
+                onChange={(e) => setForm((f) => ({ ...f, variantsText: e.target.value }))}
+              />
+            </div>
+
+            <div>
+              <Label>أنواع الزجاج المتوافقة</Label>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {(glass.data ?? []).map((g) => (
+                  <label
+                    key={g.id}
+                    className="flex items-center justify-between rounded-xl border border-border px-3 py-2 text-sm"
+                  >
+                    <span>{g.nameAr}</span>
+                    <input
+                      type="checkbox"
+                      checked={form.glassTypes.includes(g.id)}
+                      onChange={() =>
+                        setForm((f) => ({ ...f, glassTypes: toggleId(f.glassTypes, g.id) }))
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <Label>الإكسسوارات المتوافقة</Label>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {(accessories.data ?? []).map((a) => (
+                  <label
+                    key={a.id}
+                    className="flex items-center justify-between rounded-xl border border-border px-3 py-2 text-sm"
+                  >
+                    <span>{a.nameAr}</span>
+                    <input
+                      type="checkbox"
+                      checked={form.accessories.includes(a.id)}
+                      onChange={() =>
+                        setForm((f) => ({ ...f, accessories: toggleId(f.accessories, a.id) }))
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <Label>الألوان المتاحة</Label>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {DEFAULT_COLORS.map((c) => (
+                  <label
+                    key={c.id}
+                    className="flex items-center justify-between rounded-xl border border-border px-3 py-2 text-sm"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span
+                        className="h-3.5 w-3.5 rounded-full border border-border"
+                        style={{ background: c.hex }}
+                      />
+                      {c.nameAr}
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={form.colorIds.includes(c.id)}
+                      onChange={() =>
+                        setForm((f) => ({ ...f, colorIds: toggleId(f.colorIds, c.id) }))
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+
             <Button type="submit" className="w-full" variant="accent">
               حفظ
             </Button>

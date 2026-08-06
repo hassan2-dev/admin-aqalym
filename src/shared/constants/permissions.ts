@@ -52,6 +52,7 @@ export const ROUTE_PERMISSIONS: Record<string, Permission> = {
   '/orders': 'orders.view',
   '/products': 'products.view',
   '/categories': 'categories.manage',
+  '/catalogs': 'catalogs.manage',
   '/variants': 'variants.manage',
   '/glass-types': 'glass.manage',
   '/accessories': 'accessories.manage',

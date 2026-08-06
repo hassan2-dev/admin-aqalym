@@ -11,6 +11,7 @@ export const ar = {
   orders: 'الطلبات',
   products: 'المنتجات',
   categories: 'التصنيفات',
+  catalogs: 'كتالوجات المواصفات',
   variants: 'المتغيرات',
   glassTypes: 'أنواع الزجاج',
   accessories: 'الإكسسوارات',

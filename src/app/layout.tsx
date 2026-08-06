@@ -3,8 +3,12 @@ import { AppProviders } from '@/presentation/providers/app-providers';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'AQALYM Admin | عقاليم',
-  description: 'لوحة تحكم ERP لنظام عقاليم للألمنيوم المعماري',
+  title: 'AQALYM | أقاليم',
+  description: 'لوحة تحكم ERP لنظام أقاليم للألمنيوم المعماري',
+  icons: {
+    icon: [{ url: '/icon.svg', type: 'image/svg+xml' }],
+    apple: [{ url: '/apple-icon.png', sizes: '180x180' }],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
