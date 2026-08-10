@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Check, Download, MoreHorizontal, Search } from 'lucide-react';
+import { Check, Download, MoreHorizontal, Plus, Search } from 'lucide-react';
 import { PageHeader } from '@/presentation/components/shared/page-header';
 import { StatCard } from '@/presentation/components/shared/stat-card';
 import { DataTable, Td } from '@/presentation/components/shared/data-table';
@@ -72,6 +72,13 @@ export default function OrdersPage() {
         description="متابعة دورة حياة الطلبات من الاستلام حتى التسليم"
         actions={
           <>
+            {can('orders.create') || can('orders.edit') ? (
+              <Button asChild variant="accent" size="sm">
+                <Link href="/orders/new">
+                  <Plus className="h-4 w-4" /> طلب جديد
+                </Link>
+              </Button>
+            ) : null}
             {can('orders.approve') ? (
               <Button variant="default" size="sm" disabled={!selected.length}>
                 <Check className="h-4 w-4" /> اعتماد المحدد

@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { Menu } from 'lucide-react';
 import { Sidebar } from '@/presentation/components/layout/sidebar';
-import { Header } from '@/presentation/components/layout/header';
 import { useAuth } from '@/presentation/providers/auth-provider';
 import { ROUTE_PERMISSIONS } from '@/shared/constants/permissions';
 import { Skeleton } from '@/presentation/components/ui/skeleton';
+import { Button } from '@/presentation/components/ui/button';
 import { ar } from '@/presentation/i18n/ar';
 
 const PAGE_TITLES: Record<string, string> = {
@@ -50,6 +51,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     if (!loading && !user) router.replace('/login');
   }, [loading, user, router]);
 
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
   const required = Object.entries(ROUTE_PERMISSIONS)
     .sort((a, b) => b[0].length - a[0].length)
     .find(([route]) => (route === '/' ? pathname === '/' : pathname.startsWith(route)))?.[1];
@@ -77,12 +82,29 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     );
   }
 
+  const title = resolveTitle(pathname);
+
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="h-dvh overflow-hidden bg-background">
       <Sidebar open={open} onClose={() => setOpen(false)} />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <Header onMenu={() => setOpen(true)} title={resolveTitle(pathname)} />
-        <main className="flex-1 p-4 md:p-6 lg:p-8">{children}</main>
+
+      {/* mr وليس me: السايد بار يمين، فالهامش يجب أن يكون يمين أيضاً في RTL */}
+      <div className="flex h-dvh flex-col lg:mr-[260px]">
+        <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card px-4 no-print lg:hidden">
+          <Button
+            variant="outline"
+            size="icon"
+            className="h-9 w-9 rounded-lg"
+            onClick={() => setOpen(true)}
+          >
+            <Menu className="h-4 w-4" />
+          </Button>
+          <p className="truncate text-sm font-semibold">{title}</p>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <main className="p-4 md:p-6 lg:p-8">{children}</main>
+        </div>
       </div>
     </div>
   );

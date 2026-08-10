@@ -127,19 +127,40 @@ async function main() {
   console.log('  ✓ settings/app');
 
   console.log('\nCreating staff Auth users...');
-  for (const seed of SEED_STAFF) {
-    const uid = await ensureStaffAuth(seed.email, DEFAULT_PASSWORD, seed.name);
-    const { id: _oldId, ...profile } = seed;
-    await db.collection('staff').doc(uid).set(
-      {
-        ...profile,
-        id: uid,
-        status: 'active',
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true },
-    );
-    console.log(`  ✓ ${seed.email} → ${uid} (${seed.roleSlug})`);
+  try {
+    for (const seed of SEED_STAFF) {
+      const uid = await ensureStaffAuth(seed.email, DEFAULT_PASSWORD, seed.name);
+      const { id: _oldId, ...profile } = seed;
+      await db.collection('staff').doc(uid).set(
+        {
+          ...profile,
+          id: uid,
+          status: 'active',
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true },
+      );
+      console.log(`  ✓ ${seed.email} → ${uid} (${seed.roleSlug})`);
+    }
+  } catch (err: unknown) {
+    const code = (err as { code?: string }).code ?? '';
+    if (code === 'auth/configuration-not-found' || code.includes('configuration')) {
+      console.error(`
+❌ فشل إنشاء حسابات الموظفين
+
+البيانات (منتجات، طلبات، …) انبذرت بنجاح.
+بس Authentication مو مفعّل بعد.
+
+اطلب من صديقك:
+  Firebase Console → Authentication → Get started
+  → Sign-in method → فعّل Email/Password
+
+بعدها شغّل مرة ثانية فقط:
+  npm run firebase:setup
+`);
+      process.exit(1);
+    }
+    throw err;
   }
 
   console.log(`
@@ -152,8 +173,7 @@ Staff login (change password after first login):
 
 Next:
   1) Deploy rules: firebase deploy --only firestore:rules,storage
-  2) Put web config in aqalym/.env and admin-aqalym/.env.local
-  3) Set DEMO_MODE=false in both
+  2) Apps already have config with DEMO_MODE=false
 `);
 }
 

@@ -170,6 +170,20 @@ export interface Customer {
   updatedAt: string;
 }
 
+export interface OrderLineItem {
+  id: string;
+  productId: string;
+  productName: string;
+  productImage?: string;
+  categoryId: string;
+  categoryName: string;
+  width: number;
+  height: number;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
 export interface Order {
   id: string;
   orderNumber: string;
@@ -191,6 +205,8 @@ export interface Order {
   location: OrderLocation;
   estimatedPrice: number;
   finalPrice?: number;
+  /** بنود الطلب — كل بند بسعره؛ الإجمالي = مجموع lineTotal */
+  lineItems?: OrderLineItem[];
   status: OrderStatus;
   notes?: string;
   images?: string[];

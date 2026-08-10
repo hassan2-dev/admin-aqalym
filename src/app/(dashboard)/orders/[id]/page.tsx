@@ -263,6 +263,25 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
         <div className="space-y-4 xl:col-span-2">
           <SectionCard title="التفاصيل الفنية للمنتج">
             <p className="mb-4 text-xs font-medium text-accent">{order.categoryName} — {order.productName}</p>
+            {order.lineItems && order.lineItems.length > 0 ? (
+              <div className="mb-4 space-y-2">
+                {order.lineItems.map((line) => (
+                  <div
+                    key={line.id}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-border bg-muted/20 px-3 py-2 text-sm"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium">{line.productName}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {line.width}×{line.height} سم · الكمية {line.quantity} ·{' '}
+                        {formatCurrency(line.unitPrice)} / وحدة
+                      </p>
+                    </div>
+                    <p className="shrink-0 font-semibold">{formatCurrency(line.lineTotal)}</p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             <div className="grid gap-3 sm:grid-cols-2">
               <Spec label="الخيار المحدد" value={order.selectedVariant || order.orderKind} />
               <Spec

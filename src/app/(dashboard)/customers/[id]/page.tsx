@@ -38,7 +38,7 @@ export default function CustomerDetailsPage({ params }: { params: Promise<{ id: 
         </Link>
         <div className="flex gap-2">
           <Button asChild size="sm" variant="accent">
-            <Link href="/orders">
+            <Link href="/orders/new">
               <Plus className="h-4 w-4" /> طلب جديد للعميل
             </Link>
           </Button>

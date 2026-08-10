@@ -22,6 +22,7 @@ import type {
 } from '@/domain/entities';
 import type { OrderStatus, Permission } from '@/domain/enums';
 import { ORDER_STATUS_LABELS } from '@/domain/enums';
+import { DEFAULT_ROLE_PERMISSIONS } from '@/shared/constants/permissions';
 import { generateId } from '@/shared/lib/utils';
 import { mergeProductSpecifications } from '@/shared/lib/product-specs';
 import {
@@ -165,6 +166,8 @@ export const demoDb = {
   },
   getPermissions(user: StaffUser | null): Permission[] {
     if (!user) return [];
+    const defaults = DEFAULT_ROLE_PERMISSIONS[user.roleSlug];
+    if (defaults) return [...defaults];
     const role = load().roles.find((r) => r.id === user.roleId);
     return role?.permissions ?? [];
   },
@@ -195,6 +198,160 @@ export const demoDb = {
     if (!order) throw new Error('الطلب غير موجود');
     return order;
   },
+
+  async createOrder(input: {
+    customerId?: string;
+    customerName: string;
+    customerPhone: string;
+    governorate?: string;
+    city?: string;
+    address?: string;
+    notes?: string;
+    lineItems: Array<{
+      productId: string;
+      width: number;
+      height: number;
+      quantity: number;
+      unitPrice: number;
+    }>;
+  }) {
+    if (!input.customerName.trim()) throw new Error('اسم العميل مطلوب');
+    if (!input.customerPhone.trim()) throw new Error('رقم الهاتف مطلوب');
+    if (!input.lineItems.length) throw new Error('أضف منتجاً واحداً على الأقل');
+
+    const now = new Date().toISOString();
+    const state = load();
+    const lines = input.lineItems.map((line, index) => {
+      const product = state.products.find((p) => p.id === line.productId);
+      if (!product) throw new Error('منتج غير موجود');
+      const category = state.categories.find((c) => c.id === product.categoryId);
+      const qty = Math.max(1, line.quantity || 1);
+      const unitPrice = Math.max(0, line.unitPrice);
+      return {
+        id: `line-${index + 1}`,
+        productId: product.id,
+        productName: product.nameAr,
+        productImage: product.images[0],
+        categoryId: product.categoryId,
+        categoryName: category?.nameAr ?? '',
+        width: line.width || product.minimumWidth || 0,
+        height: line.height || product.minimumHeight || 0,
+        quantity: qty,
+        unitPrice,
+        lineTotal: unitPrice * qty,
+      };
+    });
+
+    const total = lines.reduce((sum, l) => sum + l.lineTotal, 0);
+    const primary = lines[0]!;
+    const primaryProduct = state.products.find((p) => p.id === primary.productId)!;
+    const category = state.categories.find((c) => c.id === primary.categoryId);
+    const year = new Date().getFullYear();
+    const seq = String(state.orders.length + 1).padStart(3, '0');
+
+    let customerId = input.customerId;
+    if (!customerId) {
+      const existing = state.customers.find(
+        (c) => c.phone === input.customerPhone || c.name === input.customerName
+      );
+      customerId = existing?.id ?? generateId('cust');
+      if (!existing) {
+        mutate((s) => {
+          s.customers.unshift({
+            id: customerId!,
+            name: input.customerName.trim(),
+            phone: input.customerPhone.trim(),
+            governorate: input.governorate ?? '',
+            city: input.city ?? '',
+            addresses: input.address
+              ? [
+                  {
+                    id: generateId('addr'),
+                    label: 'افتراضي',
+                    governorate: input.governorate ?? '',
+                    city: input.city ?? '',
+                    address: input.address,
+                    isDefault: true,
+                  },
+                ]
+              : [],
+            createdAt: now,
+            updatedAt: now,
+          });
+        });
+      }
+    }
+
+    const order: Order = {
+      id: generateId('ord'),
+      orderNumber: `AQ-${year}-${seq}`,
+      customerId: customerId!,
+      customerName: input.customerName.trim(),
+      customerPhone: input.customerPhone.trim(),
+      orderKind: primaryProduct.kind === 'ready' ? 'ready' : 'custom',
+      categoryId: primary.categoryId,
+      categorySlug: (category?.slug ?? 'doors') as Order['categorySlug'],
+      categoryName: primary.categoryName,
+      productId: primary.productId,
+      productName:
+        lines.length > 1
+          ? `${primary.productName} +${lines.length - 1}`
+          : primary.productName,
+      productImage: primary.productImage,
+      measurements: {
+        width: primary.width,
+        height: primary.height,
+        quantity: lines.reduce((s, l) => s + l.quantity, 0),
+      },
+      selectedAccessories: [],
+      location: {
+        governorate: input.governorate ?? '',
+        city: input.city ?? '',
+        address: input.address ?? '',
+      },
+      estimatedPrice: total,
+      finalPrice: total,
+      lineItems: lines,
+      status: 'approved',
+      notes: input.notes,
+      images: [],
+      timeline: [
+        {
+          status: 'submitted',
+          label: 'تم الإرسال',
+          at: now,
+          by: 'المشرف',
+        },
+        {
+          status: 'approved',
+          label: 'معتمد ومسعّر',
+          at: now,
+          by: 'المشرف',
+          note: `تم التسعير مباشرة عند الإنشاء — ${total.toLocaleString('ar-IQ')} د.ع`,
+        },
+      ],
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    mutate((s) => {
+      s.orders.unshift(order);
+      const cust = s.customers.find((c) => c.id === order.customerId);
+      if (cust) cust.updatedAt = now;
+      s.notifications.unshift({
+        id: generateId('notif'),
+        title: 'طلب جديد مسعّر',
+        body: `${order.orderNumber} — ${order.customerName} — ${total.toLocaleString('ar-IQ')} د.ع`,
+        channel: 'system',
+        orderId: order.id,
+        read: false,
+        createdAt: now,
+      });
+    });
+
+    return order;
+  },
+
   async updateOrderStatus(id: string, status: OrderStatus, note?: string, by = 'المشرف') {
     const now = new Date().toISOString();
     mutate((s) => {
@@ -644,6 +801,12 @@ export const demoDb = {
   },
   async saveRole(input: Partial<Role> & Pick<Role, 'nameAr' | 'slug' | 'permissions'>) {
     let id = input.id;
+    if (id) {
+      const existing = load().roles.find((r) => r.id === id);
+      if (existing?.isSystem) {
+        throw new Error('صلاحيات الأدوار النظامية ثابتة ولا يمكن تعديلها');
+      }
+    }
     mutate((s) => {
       if (id) {
         const idx = s.roles.findIndex((r) => r.id === id);

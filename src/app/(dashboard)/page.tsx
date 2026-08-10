@@ -277,7 +277,7 @@ export default function DashboardPage() {
           <div className="grid gap-2">
             {(can('orders.create') || can('orders.view')) && (
               <Button asChild variant="accent" className="justify-start">
-                <Link href="/orders">
+                <Link href="/orders/new">
                   <Plus className="h-4 w-4" /> {ar.createOrder}
                 </Link>
               </Button>

@@ -92,10 +92,9 @@ export default function SettingsPage() {
             </p>
             <InfoRow label="Project ID" value={firebaseConfig.projectId || '—'} />
             <InfoRow label="Auth Domain" value={firebaseConfig.authDomain || '—'} />
-            <InfoRow label="Storage Bucket" value={firebaseConfig.storageBucket || '—'} />
             <InfoRow label="Messaging Sender" value={firebaseConfig.messagingSenderId || '—'} />
             <p className="rounded-xl bg-muted p-3 text-xs text-muted-foreground">
-              عيّن مفاتيح NEXT_PUBLIC_FIREBASE_* في ملف .env.local واترك DEMO_MODE=false للاتصال بنفس مشروع الموبايل.
+              Firebase للـ Auth و Firestore فقط. تخزين الصور على Cloudflare R2 (انظر R2-SETUP.md).
             </p>
           </CardContent>
         </Card>
@@ -128,12 +127,18 @@ export default function SettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>التخزين والتطبيق</CardTitle>
+            <CardTitle>التخزين — Cloudflare R2</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Field label="مجلد التخزين">
+            <p className="rounded-xl border border-border px-3 py-2 text-sm text-muted-foreground">
+              التخزين عبر Cloudflare R2 من السيرفر. بعد تعبئة مفاتيح R2_* في `.env.local` وإعادة التشغيل يصير رفع الصور جاهز.
+            </p>
+            <Field label="مجلد الرفع الافتراضي">
               <Input value={form.storageFolder} onChange={(e) => set('storageFolder', e.target.value)} />
             </Field>
+            <p className="rounded-xl bg-muted p-3 text-xs text-muted-foreground">
+              عبّي: R2_ACCOUNT_ID ، R2_ACCESS_KEY_ID ، R2_SECRET_ACCESS_KEY ، R2_BUCKET_NAME ، R2_PUBLIC_URL
+            </p>
             <div className="flex items-center justify-between">
               <Label>تفعيل FCM</Label>
               <Switch checked={form.fcmEnabled} onCheckedChange={(v) => set('fcmEnabled', v)} />

@@ -4,7 +4,6 @@
  * - web config values        (you paste into .env files)
  *
  * Creates ALL collections, fields, seed data, and staff Auth users.
- * Does NOT need friend to create any collections manually.
  *
  * Usage: npm run firebase:setup
  */
@@ -19,47 +18,55 @@ function fail(msg: string): never {
   process.exit(1);
 }
 
-console.log(`
+async function main() {
+  console.log(`
 ╔══════════════════════════════════════╗
 ║   AQALYM — Firebase Setup (أنت)      ║
 ╚══════════════════════════════════════╝
 `);
 
-if (!existsSync(keyPath)) {
-  fail(
-    `مفقود: serviceAccountKey.json\n` +
-      `حط الملف اللي صديقك أعطاك إياه هنا:\n  ${keyPath}\n\n` +
-      `شوف ملف: لصديقك-Firebase.md`,
-  );
-}
-
-if (!existsSync(envLocal)) {
-  fail(
-    `مفقود: .env.local\n` +
-      `انسخ .env.example إلى .env.local والصق كونفك Firebase\n` +
-      `وخلّ NEXT_PUBLIC_DEMO_MODE=false`,
-  );
-}
-
-const envText = readFileSync(envLocal, 'utf8');
-const needs = [
-  'NEXT_PUBLIC_FIREBASE_API_KEY',
-  'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
-  'NEXT_PUBLIC_FIREBASE_APP_ID',
-];
-for (const key of needs) {
-  const re = new RegExp(`^${key}=(.+)$`, 'm');
-  const m = envText.match(re);
-  if (!m || !m[1]!.trim() || m[1]!.includes('your_')) {
-    fail(`عبّي ${key} في .env.local أولاً (من كونفك صديقك)`);
+  if (!existsSync(keyPath)) {
+    fail(
+      `مفقود: serviceAccountKey.json\n` +
+        `حط الملف اللي صديقك أعطاك إياه هنا:\n  ${keyPath}\n\n` +
+        `من Firebase Console → Project Settings → Service accounts → Generate new private key\n` +
+        `شوف ملف: لصديقك-Firebase.md`,
+    );
   }
-}
-if (!/NEXT_PUBLIC_DEMO_MODE=false/.test(envText)) {
-  console.warn('⚠  تأكد أن NEXT_PUBLIC_DEMO_MODE=false في .env.local');
+
+  if (!existsSync(envLocal)) {
+    fail(
+      `مفقود: .env.local\n` +
+        `انسخ .env.example إلى .env.local والصق كونفك Firebase\n` +
+        `وخلّ NEXT_PUBLIC_DEMO_MODE=false`,
+    );
+  }
+
+  const envText = readFileSync(envLocal, 'utf8');
+  const needs = [
+    'NEXT_PUBLIC_FIREBASE_API_KEY',
+    'NEXT_PUBLIC_FIREBASE_PROJECT_ID',
+    'NEXT_PUBLIC_FIREBASE_APP_ID',
+  ];
+  for (const key of needs) {
+    const re = new RegExp(`^${key}=(.+)$`, 'm');
+    const m = envText.match(re);
+    if (!m || !m[1]!.trim() || m[1]!.includes('your_')) {
+      fail(`عبّي ${key} في .env.local أولاً (من كونفك صديقك)`);
+    }
+  }
+  if (!/NEXT_PUBLIC_DEMO_MODE=false/.test(envText)) {
+    console.warn('⚠  تأكد أن NEXT_PUBLIC_DEMO_MODE=false في .env.local');
+  }
+
+  console.log('✓ serviceAccountKey.json موجود');
+  console.log('✓ .env.local موجود');
+  console.log('\n→ تشغيل بذر البيانات والحقول...\n');
+
+  await import('./seed-firebase');
 }
 
-console.log('✓ serviceAccountKey.json موجود');
-console.log('✓ .env.local موجود');
-console.log('\n→ تشغيل بذر البيانات والحقول...\n');
-
-await import('./seed-firebase');
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

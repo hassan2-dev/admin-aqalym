@@ -1,15 +1,15 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
+import { Lock } from 'lucide-react';
 import { PageHeader } from '@/presentation/components/shared/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/presentation/components/ui/card';
-import { Checkbox } from '@/presentation/components/ui/checkbox';
 import { Button } from '@/presentation/components/ui/button';
 import { Skeleton } from '@/presentation/components/ui/skeleton';
-import { useCrudMutation, useRoles } from '@/presentation/hooks/use-data';
-import { dataService } from '@/infrastructure/repositories/data-service';
-import { ALL_PERMISSIONS, ROLE_LABELS, type Permission } from '@/domain/enums';
+import { Badge } from '@/presentation/components/ui/badge';
+import { useRoles } from '@/presentation/hooks/use-data';
+import { ALL_PERMISSIONS, ROLE_LABELS, type Permission, type RoleSlug } from '@/domain/enums';
+import { DEFAULT_ROLE_PERMISSIONS } from '@/shared/constants/permissions';
 import type { Role } from '@/domain/entities';
 
 const PERMISSION_LABELS: Record<Permission, string> = {
@@ -44,56 +44,41 @@ const PERMISSION_LABELS: Record<Permission, string> = {
   'inventory.manage': 'إدارة المخزون',
 };
 
+function permissionsFor(role: Role): Permission[] {
+  const defaults = DEFAULT_ROLE_PERMISSIONS[role.slug as RoleSlug];
+  return defaults ?? role.permissions;
+}
+
 export default function RolesPage() {
   const { data, isLoading, isError, refetch } = useRoles();
-  const save = useCrudMutation(['roles'], dataService.saveRole);
   const [selected, setSelected] = useState<Role | null>(null);
-  const [perms, setPerms] = useState<Permission[]>([]);
 
   useEffect(() => {
-    if (data?.length && !selected) {
-      setSelected(data[0]!);
-      setPerms(data[0]!.permissions);
-    }
+    if (data?.length && !selected) setSelected(data[0]!);
   }, [data, selected]);
-
-  useEffect(() => {
-    if (selected) setPerms(selected.permissions);
-  }, [selected]);
 
   if (isLoading) return <Skeleton className="h-96 w-full" />;
   if (isError) {
-    return (
-      <Button onClick={() => void refetch()}>إعادة المحاولة</Button>
-    );
+    return <Button onClick={() => void refetch()}>إعادة المحاولة</Button>;
   }
 
-  function toggle(p: Permission) {
-    setPerms((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
-  }
-
-  async function onSave() {
-    if (!selected) return;
-    try {
-      await save.mutateAsync({
-        id: selected.id,
-        slug: selected.slug,
-        nameAr: selected.nameAr,
-        name: selected.name,
-        permissions: perms,
-      });
-      toast.success('تم حفظ صلاحيات الدور');
-      const refreshed = await dataService.listRoles();
-      const next = refreshed.find((r) => r.id === selected.id) ?? null;
-      setSelected(next);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'فشل الحفظ');
-    }
-  }
+  const activePerms = selected ? new Set(permissionsFor(selected)) : new Set<Permission>();
 
   return (
     <div className="space-y-6">
-      <PageHeader title="الأدوار والصلاحيات" description="تخصيص صلاحيات كل دور في النظام" />
+      <PageHeader
+        title="الأدوار والصلاحيات"
+        description="صلاحيات ثابتة حسب الدور — للعرض فقط ولا يمكن تعديلها من هنا"
+      />
+
+      <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100">
+        <Lock className="mt-0.5 h-4 w-4 shrink-0" />
+        <p>
+          الصلاحيات افتراضية ومقفلة لكل دور (مبيعات، مصنع، مشرف…). لتغيير صلاحية موظف غيّر{' '}
+          <strong>دوره</strong> من صفحة المستخدمين، لا تعدّل قائمة الصلاحيات.
+        </p>
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
         <Card>
           <CardHeader>
@@ -103,9 +88,12 @@ export default function RolesPage() {
             {(data ?? []).map((role) => (
               <button
                 key={role.id}
+                type="button"
                 onClick={() => setSelected(role)}
                 className={`w-full rounded-xl px-3 py-2 text-right text-sm transition-colors ${
-                  selected?.id === role.id ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
+                  selected?.id === role.id
+                    ? 'bg-primary text-primary-foreground'
+                    : 'hover:bg-muted'
                 }`}
               >
                 {ROLE_LABELS[role.slug] ?? role.nameAr}
@@ -115,19 +103,43 @@ export default function RolesPage() {
         </Card>
 
         <Card>
-          <CardHeader className="flex-row items-center justify-between">
-            <CardTitle>{selected ? ROLE_LABELS[selected.slug] : '—'}</CardTitle>
-            <Button onClick={() => void onSave()} disabled={!selected}>
-              حفظ الصلاحيات
-            </Button>
+          <CardHeader className="flex-row items-center justify-between gap-3">
+            <div>
+              <CardTitle>{selected ? ROLE_LABELS[selected.slug] : '—'}</CardTitle>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {activePerms.size} صلاحية افتراضية · للقراءة فقط
+              </p>
+            </div>
+            <Badge variant="secondary" className="gap-1">
+              <Lock className="h-3 w-3" />
+              مقفل
+            </Badge>
           </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {ALL_PERMISSIONS.map((p) => (
-              <label key={p} className="flex items-center gap-2 rounded-xl border border-border p-3 text-sm">
-                <Checkbox checked={perms.includes(p)} onCheckedChange={() => toggle(p)} />
-                {PERMISSION_LABELS[p]}
-              </label>
-            ))}
+          <CardContent className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {ALL_PERMISSIONS.map((p) => {
+              const on = activePerms.has(p);
+              return (
+                <div
+                  key={p}
+                  className={`rounded-xl border px-3 py-2.5 text-sm ${
+                    on
+                      ? 'border-accent/30 bg-accent/5 text-foreground'
+                      : 'border-border/60 bg-muted/30 text-muted-foreground'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span>{PERMISSION_LABELS[p]}</span>
+                    <span
+                      className={`text-[10px] font-semibold ${
+                        on ? 'text-accent' : 'text-muted-foreground'
+                      }`}
+                    >
+                      {on ? 'مفعّل' : '—'}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </CardContent>
         </Card>
       </div>

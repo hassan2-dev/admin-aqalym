@@ -43,8 +43,14 @@ export function useOrderMutations() {
     void qc.invalidateQueries({ queryKey: ['orders'] });
     void qc.invalidateQueries({ queryKey: ['order'] });
     void qc.invalidateQueries({ queryKey: ['dashboard-stats'] });
+    void qc.invalidateQueries({ queryKey: ['customers'] });
   };
   return {
+    create: useMutation({
+      mutationFn: (input: Parameters<typeof dataService.createOrder>[0]) =>
+        dataService.createOrder(input),
+      onSuccess: invalidate,
+    }),
     updateStatus: useMutation({
       mutationFn: ({ id, status, note }: { id: string; status: OrderStatus; note?: string }) =>
         dataService.updateOrderStatus(id, status, note),

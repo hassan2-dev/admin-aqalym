@@ -10,7 +10,6 @@ import {
   getDocs,
   setDoc,
 } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import type {
   Accessory,
   AppNotification,
@@ -33,8 +32,7 @@ import type {
 } from '@/domain/entities';
 import type { OrderStatus } from '@/domain/enums';
 import { demoDb, getDemoState } from '@/infrastructure/demo/store';
-import { getFirebaseDb, getFirebaseStorage, isDemoMode } from '@/infrastructure/firebase/client';
-import { generateId } from '@/shared/lib/utils';
+import { getFirebaseDb, isDemoMode } from '@/infrastructure/firebase/client';
 
 async function listCollection<T>(name: string): Promise<T[]> {
   const db = getFirebaseDb();
@@ -105,6 +103,14 @@ export const dataService = {
     if (!snap.exists()) throw new Error('الطلب غير موجود');
     return { id: snap.id, ...snap.data() } as Order;
   },
+
+  createOrder: (...args: Parameters<typeof demoDb.createOrder>) =>
+    isDemoMode
+      ? demoDb.createOrder(...args)
+      : demoDb.createOrder(...args).then(async (order) => {
+          await upsertDoc('orders', order);
+          return order;
+        }),
 
   updateOrderStatus: (...args: Parameters<typeof demoDb.updateOrderStatus>) =>
     isDemoMode
@@ -334,12 +340,15 @@ export const dataService = {
     if (isDemoMode) {
       return URL.createObjectURL(file);
     }
-    const storage = getFirebaseStorage();
-    if (!storage) throw new Error('Storage غير متاح');
-    const path = `${folder}/${generateId('file')}-${file.name}`;
-    const storageRef = ref(storage, path);
-    await uploadBytes(storageRef, file);
-    return getDownloadURL(storageRef);
+    const body = new FormData();
+    body.append('file', file);
+    body.append('folder', folder);
+    const res = await fetch('/api/upload', { method: 'POST', body });
+    const data = (await res.json()) as { url?: string; error?: string };
+    if (!res.ok || !data.url) {
+      throw new Error(data.error || 'فشل رفع الملف إلى Cloudflare R2');
+    }
+    return data.url;
   },
 
   async listProductionOrders(): Promise<ProductionOrder[]> {
