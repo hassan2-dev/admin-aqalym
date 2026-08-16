@@ -9,7 +9,7 @@ import { Skeleton } from '@/presentation/components/ui/skeleton';
 import { Badge } from '@/presentation/components/ui/badge';
 import { useRoles } from '@/presentation/hooks/use-data';
 import { ALL_PERMISSIONS, ROLE_LABELS, type Permission, type RoleSlug } from '@/domain/enums';
-import { DEFAULT_ROLE_PERMISSIONS } from '@/shared/constants/permissions';
+import { DEFAULT_ROLE_PERMISSIONS, PRIMARY_ROLE_SLUGS } from '@/shared/constants/permissions';
 import type { Role } from '@/domain/entities';
 
 const PERMISSION_LABELS: Record<Permission, string> = {
@@ -35,6 +35,7 @@ const PERMISSION_LABELS: Record<Permission, string> = {
   'projects.view': 'عرض المشاريع',
   'projects.manage': 'إدارة المشاريع',
   'reports.view': 'عرض التقارير',
+  'finance.view': 'عرض المالية',
   'users.view': 'عرض المستخدمين',
   'users.manage': 'إدارة المستخدمين',
   'roles.manage': 'إدارة الأدوار',
@@ -53,9 +54,12 @@ export default function RolesPage() {
   const { data, isLoading, isError, refetch } = useRoles();
   const [selected, setSelected] = useState<Role | null>(null);
 
+  const primary = (data ?? []).filter((r) => PRIMARY_ROLE_SLUGS.includes(r.slug));
   useEffect(() => {
-    if (data?.length && !selected) setSelected(data[0]!);
-  }, [data, selected]);
+    if (primary.length && (!selected || !PRIMARY_ROLE_SLUGS.includes(selected.slug))) {
+      setSelected(primary[0]!);
+    }
+  }, [data, selected, primary.length]);
 
   if (isLoading) return <Skeleton className="h-96 w-full" />;
   if (isError) {
@@ -68,14 +72,13 @@ export default function RolesPage() {
     <div className="space-y-6">
       <PageHeader
         title="الأدوار والصلاحيات"
-        description="صلاحيات ثابتة حسب الدور — للعرض فقط ولا يمكن تعديلها من هنا"
+        description="ثلاث شخصيات فقط: المشرف العام يرى الكل، المبيعات تسعّر وترسل، المصنع ينفّذ ويخصم من المخزن"
       />
 
       <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-100">
         <Lock className="mt-0.5 h-4 w-4 shrink-0" />
         <p>
-          الصلاحيات افتراضية ومقفلة لكل دور (مبيعات، مصنع، مشرف…). لتغيير صلاحية موظف غيّر{' '}
-          <strong>دوره</strong> من صفحة المستخدمين، لا تعدّل قائمة الصلاحيات.
+          صلاحيات الأدوار الثلاث مقفلة. غيّر دور الموظف من صفحة المستخدمين.
         </p>
       </div>
 
@@ -85,7 +88,9 @@ export default function RolesPage() {
             <CardTitle>الأدوار</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1">
-            {(data ?? []).map((role) => (
+            {(data ?? [])
+              .filter((role) => PRIMARY_ROLE_SLUGS.includes(role.slug))
+              .map((role) => (
               <button
                 key={role.id}
                 type="button"

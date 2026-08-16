@@ -1,16 +1,34 @@
 import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { toWesternDigits } from '@/shared/lib/digits';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatCurrency(value: number, locale = 'ar-IQ') {
-  return new Intl.NumberFormat(locale, {
-    style: 'currency',
-    currency: 'IQD',
-    maximumFractionDigits: 0,
-  }).format(value);
+export function formatIqdNumber(value: number): string {
+  const n = Math.round(Math.abs(Number(value) || 0));
+  const grouped = n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return value < 0 ? `-${grouped}` : grouped;
+}
+
+export function parseIqdDigits(raw: string): string {
+  return toWesternDigits(String(raw ?? '')).replace(/[^\d]/g, '');
+}
+
+export function parseIqdNumber(raw: string): number {
+  const digits = parseIqdDigits(raw);
+  return digits ? Number(digits) : 0;
+}
+
+export function formatIqdInput(raw: string): string {
+  const digits = parseIqdDigits(raw);
+  if (!digits) return '';
+  return formatIqdNumber(Number(digits));
+}
+
+export function formatCurrency(value: number) {
+  return `${formatIqdNumber(value)} د.ع`;
 }
 
 export function formatDate(value: string | Date, locale = 'ar-IQ') {

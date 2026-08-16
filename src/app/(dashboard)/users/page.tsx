@@ -5,6 +5,7 @@ import { useCrudMutation, useRoles, useStaff } from '@/presentation/hooks/use-da
 import { dataService } from '@/infrastructure/repositories/data-service';
 import type { StaffUser } from '@/domain/entities';
 import { ROLE_LABELS } from '@/domain/enums';
+import { PRIMARY_ROLE_SLUGS } from '@/shared/constants/permissions';
 import { Badge } from '@/presentation/components/ui/badge';
 
 export default function UsersPage() {
@@ -16,7 +17,7 @@ export default function UsersPage() {
   return (
     <CrudPage<StaffUser>
       title="المستخدمون"
-      description="موظفو النظام: مديرين، مبيعات، مصنع، مستودع، دعم"
+      description="ثلاث شخصيات: مشرف عام، مبيعات، مصنع"
       headers={['الاسم', 'البريد', 'الدور', 'الحالة']}
       items={data}
       loading={isLoading}
@@ -31,7 +32,9 @@ export default function UsersPage() {
           label: 'الدور',
           type: 'select',
           required: true,
-          options: (roles.data ?? []).map((r) => ({ value: r.id, label: r.nameAr })),
+          options: (roles.data ?? [])
+            .filter((r) => PRIMARY_ROLE_SLUGS.includes(r.slug))
+            .map((r) => ({ value: r.id, label: r.nameAr })),
         },
         {
           name: 'status',

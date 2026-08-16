@@ -17,7 +17,7 @@ import { ChartCard } from '@/presentation/components/shared/chart-card';
 import { SectionCard } from '@/presentation/components/shared/section-card';
 import { Button } from '@/presentation/components/ui/button';
 import { useCustomers, useOrders, useProducts } from '@/presentation/hooks/use-data';
-import { downloadCsv, formatCurrency } from '@/shared/lib/utils';
+import { downloadCsv, formatCurrency, formatIqdNumber } from '@/shared/lib/utils';
 import { ORDER_STATUS_LABELS } from '@/domain/enums';
 import { Skeleton } from '@/presentation/components/ui/skeleton';
 import { BRAND } from '@/shared/constants/brand';
@@ -76,7 +76,7 @@ export default function ReportsPage() {
                   customer: o.customerName,
                   product: o.productName,
                   status: ORDER_STATUS_LABELS[o.status],
-                  amount: o.finalPrice ?? o.estimatedPrice,
+                  amount: formatCurrency(o.finalPrice ?? o.estimatedPrice),
                   date: o.createdAt,
                 }))
               );
@@ -85,7 +85,7 @@ export default function ReportsPage() {
                 'products-report.csv',
                 (products.data ?? []).map((p) => ({
                   name: p.nameAr,
-                  price: p.estimatedPrice,
+                  price: formatCurrency(p.estimatedPrice),
                   category: p.categorySlug,
                 }))
               );
@@ -120,7 +120,7 @@ export default function ReportsPage() {
             <LineChart data={salesByMonth}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis dataKey="name" />
-              <YAxis width={80} />
+              <YAxis width={96} tickFormatter={(v) => formatIqdNumber(Number(v))} />
               <Tooltip formatter={(v) => formatCurrency(Number(v))} />
               <Line type="monotone" dataKey="value" stroke={BRAND.chart.primary} strokeWidth={2} />
             </LineChart>

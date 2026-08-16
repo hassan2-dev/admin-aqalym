@@ -1,6 +1,7 @@
 'use client';
 
 import { CrudPage, money } from '@/presentation/components/shared/crud-page';
+import { parseIqdNumber } from '@/shared/lib/utils';
 import { useAccessories, useCrudMutation } from '@/presentation/hooks/use-data';
 import { dataService } from '@/infrastructure/repositories/data-service';
 import type { Accessory } from '@/domain/entities';
@@ -22,7 +23,7 @@ export default function AccessoriesPage() {
       fields={[
         { name: 'nameAr', label: 'الاسم', required: true },
         { name: 'category', label: 'التصنيف' },
-        { name: 'price', label: 'السعر', type: 'number', required: true },
+        { name: 'price', label: 'السعر', type: 'money', required: true },
         { name: 'descriptionAr', label: 'الوصف', type: 'textarea' },
         { name: 'image', label: 'رابط الصورة' },
       ]}
@@ -40,7 +41,7 @@ export default function AccessoriesPage() {
           nameAr: values.nameAr!,
           name: values.nameAr!,
           category: values.category,
-          price: Number(values.price || 0),
+          price: parseIqdNumber(values.price || '0'),
           descriptionAr: values.descriptionAr ?? '',
           description: values.descriptionAr ?? '',
           image: values.image,

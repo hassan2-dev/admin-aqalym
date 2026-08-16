@@ -17,14 +17,30 @@ function useDemoInvalidate() {
 
 export function useDashboardStats() {
   useDemoInvalidate();
-  return useQuery({ queryKey: ['dashboard-stats'], queryFn: () => dataService.getDashboardStats() });
+  return useQuery({
+    queryKey: ['dashboard-stats'],
+    queryFn: () => dataService.getDashboardStats(),
+    staleTime: 30_000,
+  });
 }
 
-export function useOrders(filters?: { status?: OrderStatus; q?: string }) {
+export function useOrders(filters?: { status?: OrderStatus; q?: string; enabled?: boolean }) {
   useDemoInvalidate();
   return useQuery({
-    queryKey: ['orders', filters],
-    queryFn: () => dataService.listOrders(filters),
+    queryKey: ['orders', filters?.status ?? 'all'],
+    queryFn: () => dataService.listOrders({ status: filters?.status }),
+    staleTime: 15_000,
+    enabled: filters?.enabled ?? true,
+    select: (orders) => {
+      const q = filters?.q?.trim();
+      if (!q) return orders;
+      return orders.filter(
+        (o) =>
+          o.orderNumber?.includes(q) ||
+          o.customerName?.includes(q) ||
+          o.customerPhone?.includes(q),
+      );
+    },
   });
 }
 
@@ -34,6 +50,7 @@ export function useOrder(id: string) {
     queryKey: ['order', id],
     queryFn: () => dataService.getOrder(id),
     enabled: !!id,
+    staleTime: 15_000,
   });
 }
 
@@ -145,9 +162,13 @@ export function useProductionOrders() {
   });
 }
 
-export function useInventory() {
+export function useInventory(enabled = true) {
   useDemoInvalidate();
-  return useQuery({ queryKey: ['inventory'], queryFn: () => dataService.listInventory() });
+  return useQuery({
+    queryKey: ['inventory'],
+    queryFn: () => dataService.listInventory(),
+    enabled,
+  });
 }
 
 export function useInventoryTransactions() {
@@ -189,6 +210,23 @@ export function useFactoryMutations() {
         orderNumber: string;
         deductions: { inventoryId: string; quantity: number }[];
       }) => dataService.confirmMaterialConsumption(orderNumber, deductions),
+      onSuccess: invalidate,
+    }),
+    issueExecution: useMutation({
+      mutationFn: (input: {
+        orderId: string;
+        materials: { inventoryId: string; quantity: number }[];
+        notes?: string;
+      }) => dataService.issueExecutionOrder(input),
+      onSuccess: invalidate,
+    }),
+    saveInventory: useMutation({
+      mutationFn: (input: Parameters<typeof dataService.saveInventory>[0]) =>
+        dataService.saveInventory(input),
+      onSuccess: invalidate,
+    }),
+    deleteInventory: useMutation({
+      mutationFn: (id: string) => dataService.deleteInventory(id),
       onSuccess: invalidate,
     }),
     adjustInventory: useMutation({

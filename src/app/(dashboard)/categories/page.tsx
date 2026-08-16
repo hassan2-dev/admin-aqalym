@@ -33,6 +33,7 @@ export default function CategoriesPage() {
             { value: 'facades', label: 'facades' },
             { value: 'fixed_glass', label: 'fixed_glass' },
             { value: 'shutters', label: 'shutters' },
+            { value: 'services', label: 'services' },
           ],
         },
         { name: 'descriptionAr', label: 'الوصف', type: 'textarea' },

@@ -9,6 +9,7 @@ import { EmptyState } from '@/presentation/components/shared/empty-state';
 import { ErrorState } from '@/presentation/components/shared/error-state';
 import { Button } from '@/presentation/components/ui/button';
 import { Input } from '@/presentation/components/ui/input';
+import { MoneyInput } from '@/presentation/components/ui/money-input';
 import { Label } from '@/presentation/components/ui/label';
 import { Textarea } from '@/presentation/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/presentation/components/ui/dialog';
@@ -18,7 +19,7 @@ import { formatCurrency } from '@/shared/lib/utils';
 export type FieldDef = {
   name: string;
   label: string;
-  type?: 'text' | 'number' | 'textarea' | 'select';
+  type?: 'text' | 'number' | 'money' | 'textarea' | 'select';
   options?: { value: string; label: string }[];
   required?: boolean;
 };
@@ -158,6 +159,12 @@ export function CrudPage<T extends { id: string }>({
                       </option>
                     ))}
                   </select>
+                ) : field.type === 'money' ? (
+                  <MoneyInput
+                    required={field.required}
+                    value={form[field.name] ?? ''}
+                    onValueChange={(digits) => setForm((f) => ({ ...f, [field.name]: digits }))}
+                  />
                 ) : (
                   <Input
                     type={field.type ?? 'text'}

@@ -1,10 +1,13 @@
 import type {
   CategorySlug,
   InventoryTxnType,
+  MeasurementKey,
   NotificationChannel,
+  OfferingType,
   OrderKind,
   OrderStatus,
   Permission,
+  PricingMode,
   ProductKind,
   RoleSlug,
   StaffStatus,
@@ -68,11 +71,40 @@ export interface SpecCatalog {
   updatedAt: string;
 }
 
+export interface MeasurementField {
+  key: MeasurementKey;
+  enabled: boolean;
+  required: boolean;
+  min: number;
+  max: number;
+  unit: string;
+}
+
+export interface OfferingOptionValue {
+  id: string;
+  nameAr: string;
+  priceDelta?: number;
+  hex?: string;
+}
+
+export interface OfferingOptionGroup {
+  id: string;
+  nameAr: string;
+  required: boolean;
+  multi?: boolean;
+  values: OfferingOptionValue[];
+}
+
+/** Unified orderable item — product or service, same engine. */
 export interface Product {
   id: string;
   categoryId: string;
   categorySlug: CategorySlug;
+  /** Derived: custom if requiresMeasurements, else ready. */
   kind: ProductKind;
+  offeringType?: OfferingType;
+  published?: boolean;
+  sortOrder?: number;
   name: string;
   nameAr: string;
   description: string;
@@ -83,12 +115,15 @@ export interface Product {
   minimumHeight: number;
   maximumHeight: number;
   estimatedPrice: number;
-  /** Inherited catalog reference; catalog specs stay fixed and reusable. */
+  pricingMode?: PricingMode;
+  requiresMeasurements?: boolean;
+  measurementFields?: MeasurementField[];
+  requiresLocation?: boolean;
   catalogId: string | null;
-  /** Product-only additions; never mutate the linked catalog. */
   extraSpecifications: ProductSpec[];
-  /** Denormalized catalog specs + extras for mobile/compat display. */
   specifications: ProductSpec[];
+  optionGroups?: OfferingOptionGroup[];
+  addonIds?: string[];
   variants: string[];
   glassTypes: string[];
   accessories: string[];
@@ -216,6 +251,14 @@ export interface Order {
   updatedAt: string;
 }
 
+export interface ProductionMaterial {
+  inventoryId: string;
+  nameAr: string;
+  sku: string;
+  unit: string;
+  quantity: number;
+}
+
 export interface ProductionOrder {
   id: string;
   orderId: string;
@@ -224,6 +267,7 @@ export interface ProductionOrder {
   startedAt?: string;
   readyAt?: string;
   notes?: string;
+  materials?: ProductionMaterial[];
   createdAt: string;
   updatedAt: string;
 }

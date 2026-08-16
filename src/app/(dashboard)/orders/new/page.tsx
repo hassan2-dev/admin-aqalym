@@ -22,7 +22,9 @@ import {
   useOrderMutations,
   useProducts,
 } from '@/presentation/hooks/use-data';
-import { formatCurrency, generateId } from '@/shared/lib/utils';
+import { formatCurrency, generateId, parseIqdNumber } from '@/shared/lib/utils';
+import { normalizeNumericInput } from '@/shared/lib/digits';
+import { MoneyInput } from '@/presentation/components/ui/money-input';
 import { useAuth } from '@/presentation/providers/auth-provider';
 import type { Product } from '@/domain/entities';
 
@@ -72,7 +74,7 @@ export default function NewOrderPage() {
     return lines.map((line) => {
       const product = productMap.get(line.productId);
       const quantity = Math.max(1, Number(line.quantity) || 1);
-      const unitPrice = Math.max(0, Number(line.unitPrice) || 0);
+      const unitPrice = Math.max(0, parseIqdNumber(line.unitPrice));
       return {
         ...line,
         product,
@@ -277,35 +279,47 @@ export default function NewOrderPage() {
                     <div className="space-y-1.5">
                       <Label>العرض (سم)</Label>
                       <Input
-                        type="number"
+                        inputMode="decimal"
                         value={line.width}
-                        onChange={(e) => updateLine(line.key, { width: e.target.value })}
+                        onChange={(e) =>
+                          updateLine(line.key, { width: normalizeNumericInput(e.target.value, true) })
+                        }
                       />
                     </div>
                     <div className="space-y-1.5">
                       <Label>الارتفاع (سم)</Label>
                       <Input
-                        type="number"
+                        inputMode="decimal"
                         value={line.height}
-                        onChange={(e) => updateLine(line.key, { height: e.target.value })}
+                        onChange={(e) =>
+                          updateLine(line.key, {
+                            height: normalizeNumericInput(e.target.value, true),
+                          })
+                        }
                       />
                     </div>
                     <div className="space-y-1.5">
                       <Label>الكمية</Label>
                       <Input
-                        type="number"
+                        inputMode="numeric"
                         min={1}
                         value={line.quantity}
-                        onChange={(e) => updateLine(line.key, { quantity: e.target.value })}
+                        onChange={(e) =>
+                          updateLine(line.key, {
+                            quantity: normalizeNumericInput(e.target.value),
+                          })
+                        }
                       />
                     </div>
                     <div className="space-y-1.5 sm:col-span-2 lg:col-span-2">
                       <Label>سعر الوحدة (د.ع)</Label>
-                      <Input
-                        type="number"
-                        min={0}
+                      <MoneyInput
                         value={line.unitPrice}
-                        onChange={(e) => updateLine(line.key, { unitPrice: e.target.value })}
+                        onValueChange={(digits) =>
+                          updateLine(line.key, {
+                            unitPrice: digits,
+                          })
+                        }
                       />
                       <p className="text-[11px] text-muted-foreground">
                         يُملأ تلقائياً من سعر المنتج ويمكن تعديله
@@ -343,7 +357,7 @@ export default function NewOrderPage() {
                   <span className="text-xl font-bold text-primary">{formatCurrency(grandTotal)}</span>
                 </div>
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  يُحفظ الطلب معتمداً ومسعّراً مباشرة
+                يُحفظ الطلب مسعّراً. بعد الاعتماد ينرسل للمصنع.
                 </p>
               </div>
               <Button

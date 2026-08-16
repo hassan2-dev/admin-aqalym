@@ -11,10 +11,11 @@ import { SectionCard } from '@/presentation/components/shared/section-card';
 import { Input } from '@/presentation/components/ui/input';
 import { Button } from '@/presentation/components/ui/button';
 import { useOrders } from '@/presentation/hooks/use-data';
-import { ORDER_STATUS_LABELS, type OrderStatus } from '@/domain/enums';
+import { ORDER_STATUS_LABELS } from '@/domain/enums';
 import { ar } from '@/presentation/i18n/ar';
 import { downloadCsv, formatCurrency, formatDate } from '@/shared/lib/utils';
 import { useAuth } from '@/presentation/providers/auth-provider';
+import { isOrderPriced, salesStage, SALES_STAGE_LABELS, type SalesStageId } from '@/shared/lib/order-flow';
 import {
   ShoppingCart,
   Clock,
@@ -24,39 +25,48 @@ import {
 
 const PAGE_SIZE = 10;
 
-const STATUS_PILLS: { id: OrderStatus | 'all'; label: string }[] = [
+const STAGE_PILLS: { id: SalesStageId | 'all'; label: string }[] = [
   { id: 'all', label: 'الكل' },
-  { id: 'submitted', label: ORDER_STATUS_LABELS.submitted },
-  { id: 'under_review', label: ORDER_STATUS_LABELS.under_review },
-  { id: 'approved', label: ORDER_STATUS_LABELS.approved },
-  { id: 'in_production', label: ORDER_STATUS_LABELS.in_production },
-  { id: 'completed', label: ORDER_STATUS_LABELS.completed },
+  { id: 'review', label: SALES_STAGE_LABELS.review },
+  { id: 'pricing', label: SALES_STAGE_LABELS.pricing },
+  { id: 'approval', label: SALES_STAGE_LABELS.approval },
+  { id: 'ready_factory', label: SALES_STAGE_LABELS.ready_factory },
+  { id: 'factory', label: SALES_STAGE_LABELS.factory },
+  { id: 'done', label: SALES_STAGE_LABELS.done },
 ];
 
 export default function OrdersPage() {
   const { can } = useAuth();
+  const canSeePrices = can('finance.view') || can('orders.price');
   const [q, setQ] = useState('');
-  const [status, setStatus] = useState<OrderStatus | 'all'>('all');
+  const [stage, setStage] = useState<SalesStageId | 'all'>('all');
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<string[]>([]);
   const { data, isLoading, isError, refetch } = useOrders({
     q: q || undefined,
-    status: status === 'all' ? undefined : status,
   });
 
-  const pages = Math.max(1, Math.ceil((data?.length ?? 0) / PAGE_SIZE));
+  const filtered = useMemo(() => {
+    const all = data ?? [];
+    if (stage === 'all') return all;
+    return all.filter((o) => salesStage(o) === stage);
+  }, [data, stage]);
+
+  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const rows = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
-    return (data ?? []).slice(start, start + PAGE_SIZE);
-  }, [data, page]);
+    return filtered.slice(start, start + PAGE_SIZE);
+  }, [filtered, page]);
 
   const summary = useMemo(() => {
     const all = data ?? [];
     return {
       total: all.length,
-      pending: all.filter((o) => ['submitted', 'under_review'].includes(o.status)).length,
-      factory: all.filter((o) => ['sent_to_factory', 'in_production'].includes(o.status)).length,
-      completed: all.filter((o) => o.status === 'completed').length,
+      pending: all.filter((o) =>
+        ['review', 'pricing', 'approval'].includes(salesStage(o)),
+      ).length,
+      factory: all.filter((o) => salesStage(o) === 'factory').length,
+      completed: all.filter((o) => salesStage(o) === 'done').length,
     };
   }, [data]);
 
@@ -68,8 +78,8 @@ export default function OrdersPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="إدارة الطلبات"
-        description="متابعة دورة حياة الطلبات من الاستلام حتى التسليم"
+        title="الطلبات"
+        description="المراحل: مراجعة → تسعير → اعتماد → المصنع. الإدارة تعرض الطلبات فقط، والمبيعات تدير المسار."
         actions={
           <>
             {can('orders.create') || can('orders.edit') ? (
@@ -84,28 +94,36 @@ export default function OrdersPage() {
                 <Check className="h-4 w-4" /> اعتماد المحدد
               </Button>
             ) : null}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                downloadCsv(
-                  'orders.csv',
-                  (data ?? []).map((o) => ({
-                    orderNumber: o.orderNumber,
-                    customer: o.customerName,
-                    product: o.productName,
-                    status: ORDER_STATUS_LABELS[o.status],
-                    amount: o.finalPrice ?? o.estimatedPrice,
-                    date: o.createdAt,
-                  }))
-                )
-              }
-            >
-              <Download className="h-4 w-4" /> {ar.exportCsv}
-            </Button>
+            {canSeePrices ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  downloadCsv(
+                    'orders.csv',
+                    (data ?? []).map((o) => ({
+                      orderNumber: o.orderNumber,
+                      customer: o.customerName,
+                      product: o.productName,
+                      status: ORDER_STATUS_LABELS[o.status],
+                      amount: formatCurrency(o.finalPrice ?? o.estimatedPrice),
+                      date: o.createdAt,
+                    })),
+                  )
+                }
+              >
+                <Download className="h-4 w-4" /> {ar.exportCsv}
+              </Button>
+            ) : null}
           </>
         }
       />
+
+      {!can('orders.edit') && can('orders.view') ? (
+        <div className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm">
+          عرض فقط. مسار الطلب (مراجعة، تسعير، اعتماد) عند المبيعات.
+        </div>
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard title="إجمالي الطلبات" value={summary.total} icon={ShoppingCart} />
@@ -117,16 +135,16 @@ export default function OrdersPage() {
       <SectionCard>
         <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center">
           <div className="flex flex-wrap gap-2">
-            {STATUS_PILLS.map((pill) => (
+            {STAGE_PILLS.map((pill) => (
               <button
                 key={pill.id}
                 type="button"
                 onClick={() => {
-                  setStatus(pill.id);
+                  setStage(pill.id);
                   setPage(1);
                 }}
                 className={
-                  status === pill.id
+                  stage === pill.id
                     ? 'rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground'
                     : 'rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted'
                 }
@@ -150,7 +168,11 @@ export default function OrdersPage() {
         </div>
 
         <DataTable
-          headers={['', 'رقم الطلب', 'العميل', 'المنتج', 'المقاسات', 'الحالة', 'السعر', 'التاريخ', '']}
+          headers={
+            canSeePrices
+              ? ['', 'رقم الطلب', 'العميل', 'المنتج', 'المقاسات', 'الحالة', 'السعر', 'التاريخ', '']
+              : ['', 'رقم الطلب', 'العميل', 'المنتج', 'المقاسات', 'الحالة', 'التاريخ', '']
+          }
           loading={isLoading}
           error={isError}
           onRetry={() => void refetch()}
@@ -162,7 +184,7 @@ export default function OrdersPage() {
             <Td>
               <input type="checkbox" checked={selected.length === rows.length && rows.length > 0} onChange={toggleAll} />
             </Td>
-            <Td colSpan={8} className="text-xs text-muted-foreground">
+            <Td colSpan={canSeePrices ? 8 : 7} className="text-xs text-muted-foreground">
               تحديد الكل في الصفحة
             </Td>
           </tr>
@@ -204,7 +226,13 @@ export default function OrdersPage() {
               <Td>
                 <StatusBadge status={o.status} />
               </Td>
-              <Td className="font-medium">{formatCurrency(o.finalPrice ?? o.estimatedPrice)}</Td>
+              {canSeePrices ? (
+                <Td className="font-medium">
+                  {isOrderPriced(o) ? formatCurrency(o.finalPrice!) : (
+                    <span className="text-warning">بدون سعر</span>
+                  )}
+                </Td>
+              ) : null}
               <Td>{formatDate(o.createdAt)}</Td>
               <Td>
                 <Link href={`/orders/${o.id}`} className="inline-flex rounded-lg p-1.5 hover:bg-muted">
@@ -218,8 +246,8 @@ export default function OrdersPage() {
         {!isLoading && !isError && rows.length > 0 ? (
           <div className="mt-4 flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
-              عرض {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, data?.length ?? 0)} من{' '}
-              {data?.length ?? 0} طلب
+              عرض {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, filtered.length)} من{' '}
+              {filtered.length} طلب
             </p>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>

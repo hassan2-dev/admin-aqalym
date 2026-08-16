@@ -42,7 +42,7 @@ export function StatCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm text-muted-foreground">{title}</p>
-          <p className="mt-2 truncate text-2xl font-semibold tracking-tight">
+          <p className="mt-2 truncate text-2xl font-semibold tabular-nums tracking-tight">
             {currency && typeof value === 'number' ? formatCurrency(value) : value}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">

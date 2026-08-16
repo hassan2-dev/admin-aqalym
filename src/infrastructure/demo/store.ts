@@ -11,6 +11,7 @@ import type {
   InventoryTransaction,
   Order,
   OtpLog,
+  ProductionMaterial,
   ProductionOrder,
   Product,
   Project,
@@ -23,7 +24,9 @@ import type {
 import type { OrderStatus, Permission } from '@/domain/enums';
 import { ORDER_STATUS_LABELS } from '@/domain/enums';
 import { DEFAULT_ROLE_PERMISSIONS } from '@/shared/constants/permissions';
-import { generateId } from '@/shared/lib/utils';
+import { generateId, formatCurrency } from '@/shared/lib/utils';
+import { assertCanApprove, isOrderPriced } from '@/shared/lib/order-flow';
+import { deriveKind, normalizeOffering } from '@/shared/lib/offering';
 import { mergeProductSpecifications } from '@/shared/lib/product-specs';
 import {
   SEED_ACCESSORIES,
@@ -44,7 +47,7 @@ import {
   SEED_VARIANTS,
 } from '@/infrastructure/demo/seed';
 
-const STORAGE_KEY = 'aqalym-admin-demo-v3';
+const STORAGE_KEY = 'aqalym-admin-demo-v5';
 
 export interface DemoState {
   catalogs: SpecCatalog[];
@@ -252,7 +255,9 @@ export const demoDb = {
     let customerId = input.customerId;
     if (!customerId) {
       const existing = state.customers.find(
-        (c) => c.phone === input.customerPhone || c.name === input.customerName
+        (c) =>
+          c.phone.replace(/\D/g, '') === input.customerPhone.replace(/\D/g, '') ||
+          c.id === input.customerId
       );
       customerId = existing?.id ?? generateId('cust');
       if (!existing) {
@@ -327,7 +332,7 @@ export const demoDb = {
           label: 'معتمد ومسعّر',
           at: now,
           by: 'المشرف',
-          note: `تم التسعير مباشرة عند الإنشاء — ${total.toLocaleString('ar-IQ')} د.ع`,
+          note: `تم التسعير مباشرة عند الإنشاء — ${formatCurrency(total)}`,
         },
       ],
       createdAt: now,
@@ -341,7 +346,7 @@ export const demoDb = {
       s.notifications.unshift({
         id: generateId('notif'),
         title: 'طلب جديد مسعّر',
-        body: `${order.orderNumber} — ${order.customerName} — ${total.toLocaleString('ar-IQ')} د.ع`,
+        body: `${order.orderNumber} — ${order.customerName} — ${formatCurrency(total)}`,
         channel: 'system',
         orderId: order.id,
         read: false,
@@ -357,6 +362,7 @@ export const demoDb = {
     mutate((s) => {
       const order = s.orders.find((o) => o.id === id);
       if (!order) throw new Error('الطلب غير موجود');
+      if (status === 'approved') assertCanApprove(order);
       order.status = status;
       order.updatedAt = now;
       if (status === 'rejected') order.rejectionReason = note;
@@ -380,19 +386,36 @@ export const demoDb = {
     return this.getOrder(id);
   },
   async updateOrderPrice(id: string, price: number) {
+    if (!Number.isFinite(price) || price <= 0) throw new Error('السعر يجب أن يكون أكبر من صفر');
     mutate((s) => {
       const order = s.orders.find((o) => o.id === id);
       if (!order) throw new Error('الطلب غير موجود');
+      const now = new Date().toISOString();
       order.finalPrice = price;
       order.estimatedPrice = price;
-      order.updatedAt = new Date().toISOString();
+      order.updatedAt = now;
+      order.timeline.push({
+        status: order.status,
+        label: 'تم التسعير',
+        at: now,
+        by: 'المبيعات',
+        note: `السعر النهائي ${formatCurrency(price)}`,
+      });
     });
     return this.getOrder(id);
   },
   async convertToProduction(id: string) {
-    const order = await this.updateOrderStatus(id, 'sent_to_factory', 'تحويل لأمر إنتاج');
+    const current = await this.getOrder(id);
+    if (!isOrderPriced(current)) {
+      throw new Error('سعّر الطلب أولاً قبل إرساله للمصنع');
+    }
+    if (current.status !== 'approved') {
+      throw new Error('اعتمد الطلب بعد التسعير ثم أرسله للمصنع');
+    }
+    const order = await this.updateOrderStatus(id, 'sent_to_factory', 'أُرسل للمصنع بعد التسعير');
     const now = new Date().toISOString();
     mutate((s) => {
+      if (s.productionOrders.some((p) => p.orderId === order.id)) return;
       s.productionOrders.unshift({
         id: generateId('po'),
         orderId: order.id,
@@ -401,24 +424,7 @@ export const demoDb = {
         createdAt: now,
         updatedAt: now,
       });
-      // Deduct inventory sample
-      const inv = s.inventory[0];
-      if (inv) {
-        const qty = Math.max(1, order.measurements.quantity * 2);
-        inv.quantity = Math.max(0, inv.quantity - qty);
-        inv.updatedAt = now;
-        s.inventoryTransactions.unshift({
-          id: generateId('txn'),
-          inventoryId: inv.id,
-          type: 'out',
-          quantity: qty,
-          reference: order.orderNumber,
-          note: 'خصم تلقائي عند التحويل للإنتاج',
-          createdAt: now,
-        });
-      }
     });
-    await this.updateOrderStatus(id, 'in_production', 'بدء الإنتاج في المصنع');
     return this.getOrder(id);
   },
 
@@ -437,7 +443,7 @@ export const demoDb = {
           const nextCatalogId = catalogId !== undefined ? catalogId : prev.catalogId;
           const nextExtras = extras !== undefined ? extras : prev.extraSpecifications ?? [];
           const catalog = s.catalogs.find((c) => c.id === nextCatalogId);
-          s.products[idx] = {
+          s.products[idx] = normalizeOffering({
             ...prev,
             ...input,
             catalogId: nextCatalogId ?? null,
@@ -445,8 +451,13 @@ export const demoDb = {
             specifications:
               input.specifications ??
               mergeProductSpecifications(catalog, nextExtras),
+            kind: deriveKind(
+              input.requiresMeasurements ??
+                prev.requiresMeasurements ??
+                (input.kind ?? prev.kind) !== 'ready',
+            ),
             updatedAt: now,
-          } as Product;
+          } as Product);
         }
       } else {
         id = generateId('prod');
@@ -458,7 +469,10 @@ export const demoDb = {
           id,
           categoryId: input.categoryId,
           categorySlug: cat?.slug ?? 'doors',
-          kind: input.kind ?? 'custom',
+          kind: deriveKind(input.requiresMeasurements ?? input.kind !== 'ready'),
+          offeringType: input.offeringType ?? 'product',
+          published: input.published !== false,
+          sortOrder: input.sortOrder ?? 0,
           name: input.name ?? input.nameAr,
           nameAr: input.nameAr,
           description: input.description ?? '',
@@ -469,10 +483,16 @@ export const demoDb = {
           minimumHeight: input.minimumHeight ?? 50,
           maximumHeight: input.maximumHeight ?? 300,
           estimatedPrice: input.estimatedPrice ?? 0,
+          pricingMode: input.pricingMode ?? (input.kind === 'ready' ? 'fixed' : 'sales_quote'),
+          requiresMeasurements: input.requiresMeasurements ?? input.kind !== 'ready',
+          measurementFields: input.measurementFields ?? [],
+          requiresLocation: input.requiresLocation ?? input.offeringType === 'service',
           catalogId: nextCatalogId,
           extraSpecifications: nextExtras,
           specifications:
             input.specifications ?? mergeProductSpecifications(catalog, nextExtras),
+          optionGroups: input.optionGroups ?? [],
+          addonIds: input.addonIds ?? [],
           variants: input.variants ?? [],
           glassTypes: input.glassTypes ?? [],
           accessories: input.accessories ?? [],
@@ -913,24 +933,142 @@ export const demoDb = {
   },
 
   async confirmMaterialConsumption(orderNumber: string, deductions: { inventoryId: string; quantity: number }[]) {
+    const state = load();
+    for (const d of deductions) {
+      if (d.quantity <= 0) continue;
+      const item = state.inventory.find((i) => i.id === d.inventoryId);
+      if (!item) continue;
+      if (item.quantity < d.quantity) {
+        throw new Error(
+          `المخزن ما يكفي لـ ${item.nameAr}: متوفر ${item.quantity} ${item.unit}، مطلوب ${d.quantity}`,
+        );
+      }
+    }
     const now = new Date().toISOString();
+    const warnings: string[] = [];
     mutate((s) => {
       deductions.forEach((d) => {
+        if (d.quantity <= 0) return;
         const item = s.inventory.find((i) => i.id === d.inventoryId);
         if (!item) return;
-        item.quantity = Math.max(0, item.quantity - d.quantity);
+        item.quantity -= d.quantity;
         item.updatedAt = now;
+        if (item.quantity <= item.reorderLevel) {
+          warnings.push(
+            `${item.nameAr}: تبقى ${item.quantity} ${item.unit} — حد التنبيه ${item.reorderLevel}`,
+          );
+        }
         s.inventoryTransactions.unshift({
           id: generateId('txn'),
           inventoryId: d.inventoryId,
           type: 'out',
           quantity: d.quantity,
           reference: orderNumber,
-          note: 'استهلاك مواد إنتاج',
+          note: `استهلاك لأمر ${orderNumber}`,
           createdAt: now,
         });
       });
     });
-    return load().inventory;
+    return { items: load().inventory, warnings };
+  },
+
+  async issueExecutionOrder(input: {
+    orderId: string;
+    materials: { inventoryId: string; quantity: number }[];
+    notes?: string;
+  }) {
+    const order = await this.getOrder(input.orderId);
+    if (!['sent_to_factory', 'in_production'].includes(order.status)) {
+      throw new Error('الطلب لازم يكون واصل للمصنع أولاً');
+    }
+    const deductions = input.materials.filter((m) => m.quantity > 0);
+    if (!deductions.length) throw new Error('حدد المواد والكميات المستخدمة');
+    const result = await this.confirmMaterialConsumption(order.orderNumber, deductions);
+    const now = new Date().toISOString();
+    const inventory = load().inventory;
+    const materials: ProductionMaterial[] = deductions.map((d) => {
+      const item = inventory.find((i) => i.id === d.inventoryId);
+      return {
+        inventoryId: d.inventoryId,
+        nameAr: item?.nameAr ?? d.inventoryId,
+        sku: item?.sku ?? '',
+        unit: item?.unit ?? 'قطعة',
+        quantity: d.quantity,
+      };
+    });
+    mutate((s) => {
+      const existing = s.productionOrders.find((p) => p.orderId === order.id);
+      if (existing) {
+        existing.status = 'in_production';
+        existing.startedAt = existing.startedAt ?? now;
+        existing.updatedAt = now;
+        if (input.notes) existing.notes = input.notes;
+        existing.materials = [...(existing.materials ?? []), ...materials];
+      } else {
+        s.productionOrders.unshift({
+          id: generateId('po'),
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          status: 'in_production',
+          startedAt: now,
+          notes: input.notes,
+          materials,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+    });
+    await this.updateOrderStatus(order.id, 'in_production', 'أمر تنفيذ مع خصم مواد المخزن');
+    return {
+      production: load().productionOrders.find((p) => p.orderId === order.id)!,
+      warnings: result.warnings,
+    };
+  },
+
+  async saveInventory(
+    input: Partial<InventoryItem> & Pick<InventoryItem, 'nameAr' | 'quantity' | 'unit' | 'reorderLevel'>,
+  ) {
+    const now = new Date().toISOString();
+    let id = input.id;
+    mutate((s) => {
+      if (id) {
+        const idx = s.inventory.findIndex((i) => i.id === id);
+        if (idx >= 0) {
+          s.inventory[idx] = {
+            ...s.inventory[idx]!,
+            ...input,
+            name: input.name || input.nameAr,
+            updatedAt: now,
+          };
+        }
+      } else {
+        id = generateId('inv');
+        s.inventory.unshift({
+          id,
+          sku: input.sku?.trim() || `SKU-${id.slice(-6).toUpperCase()}`,
+          name: input.name || input.nameAr,
+          nameAr: input.nameAr,
+          quantity: Number(input.quantity) || 0,
+          unit: input.unit || 'قطعة',
+          reorderLevel: Number(input.reorderLevel) || 0,
+          updatedAt: now,
+        });
+        s.inventoryTransactions.unshift({
+          id: generateId('txn'),
+          inventoryId: id,
+          type: 'in',
+          quantity: Number(input.quantity) || 0,
+          note: `إضافة صنف جديد — حد التنبيه ${input.reorderLevel} ${input.unit}`,
+          createdAt: now,
+        });
+      }
+    });
+    return load().inventory.find((i) => i.id === id)!;
+  },
+
+  async deleteInventory(id: string) {
+    mutate((s) => {
+      s.inventory = s.inventory.filter((i) => i.id !== id);
+    });
   },
 };

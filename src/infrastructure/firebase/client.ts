@@ -1,5 +1,5 @@
 import { FirebaseApp, getApps, initializeApp } from 'firebase/app';
-import { Auth, getAuth } from 'firebase/auth';
+import { Auth, browserLocalPersistence, getAuth, initializeAuth } from 'firebase/auth';
 import { Firestore, getFirestore } from 'firebase/firestore';
 import { FirebaseStorage, getStorage } from 'firebase/storage';
 
@@ -33,7 +33,11 @@ export function getFirebaseAuth() {
   if (!auth) {
     const a = getFirebaseApp();
     if (!a) return null;
-    auth = getAuth(a);
+    try {
+      auth = initializeAuth(a, { persistence: browserLocalPersistence });
+    } catch {
+      auth = getAuth(a);
+    }
   }
   return auth;
 }

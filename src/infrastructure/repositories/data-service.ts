@@ -22,6 +22,7 @@ import type {
   Order,
   OtpLog,
   Product,
+  ProductionMaterial,
   ProductionOrder,
   Project,
   Role,
@@ -30,7 +31,11 @@ import type {
   StaffUser,
   Variant,
 } from '@/domain/entities';
-import type { OrderStatus } from '@/domain/enums';
+import { ORDER_STATUS_LABELS, type OrderStatus } from '@/domain/enums';
+import { generateId, formatCurrency } from '@/shared/lib/utils';
+import { assertCanApprove, isOrderPriced } from '@/shared/lib/order-flow';
+import { customerFromAppUser, customerFromOrder, mergeCustomersFromOrders } from '@/shared/lib/customers';
+import { normalizeOffering } from '@/shared/lib/offering';
 import { demoDb, getDemoState } from '@/infrastructure/demo/store';
 import { getFirebaseDb, isDemoMode } from '@/infrastructure/firebase/client';
 
@@ -44,8 +49,69 @@ async function listCollection<T>(name: string): Promise<T[]> {
 async function upsertDoc<T extends { id: string }>(name: string, data: T) {
   const db = getFirebaseDb();
   if (!db) throw new Error('Firestore غير متاح');
-  await setDoc(doc(db, name, data.id), data, { merge: true });
+  const { id, ...rest } = data;
+  await setDoc(doc(db, name, id), stripUndefined(rest as Record<string, unknown>), { merge: true });
   return data;
+}
+
+function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value === undefined) continue;
+    if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+      out[key] = stripUndefined(value as Record<string, unknown>);
+    } else if (Array.isArray(value)) {
+      out[key] = value.map((item) =>
+        item && typeof item === 'object' && !Array.isArray(item)
+          ? stripUndefined(item as Record<string, unknown>)
+          : item,
+      );
+    } else {
+      out[key] = value;
+    }
+  }
+  return out as T;
+}
+
+/** Mobile orders often omit admin-only fields — normalize before UI/mutations. */
+function normalizeOrder(raw: Order): Order {
+  const measurements = raw.measurements ?? { width: 0, height: 0, quantity: 1 };
+  const location = raw.location ?? {
+    governorate: '',
+    city: '',
+    address: '',
+  };
+  const timeline = Array.isArray(raw.timeline) ? raw.timeline : [];
+  const normalizedLocation: Order['location'] = {
+    governorate: location.governorate ?? '',
+    city: location.city ?? '',
+    address: location.address ?? '',
+  };
+  if (typeof location.latitude === 'number') normalizedLocation.latitude = location.latitude;
+  if (typeof location.longitude === 'number') normalizedLocation.longitude = location.longitude;
+
+  return {
+    ...raw,
+    selectedAccessories: raw.selectedAccessories ?? [],
+    measurements: {
+      width: Number(measurements.width) || 0,
+      height: Number(measurements.height) || 0,
+      quantity: Number(measurements.quantity) || 1,
+    },
+    location: normalizedLocation,
+    timeline,
+    estimatedPrice: Number(raw.estimatedPrice) || 0,
+    orderKind: raw.orderKind ?? 'custom',
+    status: raw.status ?? 'submitted',
+  };
+}
+
+async function readOrderDoc(id: string): Promise<Order> {
+  const db = getFirebaseDb();
+  if (!db) throw new Error('Firestore غير متاح');
+  const snap = await getDoc(doc(db, 'orders', id));
+  if (!snap.exists()) throw new Error('الطلب غير موجود');
+  return normalizeOrder({ id: snap.id, ...snap.data() } as Order);
 }
 
 export const dataService = {
@@ -80,7 +146,7 @@ export const dataService = {
 
   async listOrders(filters?: { status?: OrderStatus; q?: string }) {
     if (isDemoMode) return demoDb.listOrders(filters);
-    let orders = await listCollection<Order>('orders');
+    let orders = (await listCollection<Order>('orders')).map(normalizeOrder);
     orders = orders.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
     if (filters?.status) orders = orders.filter((o) => o.status === filters.status);
     if (filters?.q) {
@@ -97,11 +163,7 @@ export const dataService = {
 
   async getOrder(id: string) {
     if (isDemoMode) return demoDb.getOrder(id);
-    const db = getFirebaseDb();
-    if (!db) throw new Error('Firestore غير متاح');
-    const snap = await getDoc(doc(db, 'orders', id));
-    if (!snap.exists()) throw new Error('الطلب غير موجود');
-    return { id: snap.id, ...snap.data() } as Order;
+    return readOrderDoc(id);
   },
 
   createOrder: (...args: Parameters<typeof demoDb.createOrder>) =>
@@ -109,36 +171,94 @@ export const dataService = {
       ? demoDb.createOrder(...args)
       : demoDb.createOrder(...args).then(async (order) => {
           await upsertDoc('orders', order);
+          const customer =
+            getDemoState().customers.find((c) => c.id === order.customerId) ??
+            customerFromOrder(order);
+          await upsertDoc('customers', customer);
           return order;
         }),
 
-  updateOrderStatus: (...args: Parameters<typeof demoDb.updateOrderStatus>) =>
-    isDemoMode
-      ? demoDb.updateOrderStatus(...args)
-      : demoDb.updateOrderStatus(...args).then(async (order) => {
-          await upsertDoc('orders', order);
-          return order;
-        }),
+  async updateOrderStatus(id: string, status: OrderStatus, note?: string, by = 'المشرف') {
+    if (isDemoMode) return demoDb.updateOrderStatus(id, status, note, by);
+    const order = await readOrderDoc(id);
+    if (status === 'approved') assertCanApprove(order);
+    const now = new Date().toISOString();
+    const event: Order['timeline'][number] = {
+      status,
+      label: ORDER_STATUS_LABELS[status],
+      at: now,
+      by,
+    };
+    if (note?.trim()) event.note = note.trim();
 
-  updateOrderPrice: (...args: Parameters<typeof demoDb.updateOrderPrice>) =>
-    isDemoMode
-      ? demoDb.updateOrderPrice(...args)
-      : demoDb.updateOrderPrice(...args).then(async (order) => {
-          await upsertDoc('orders', order);
-          return order;
-        }),
+    const next: Order = {
+      ...order,
+      status,
+      updatedAt: now,
+      timeline: [...order.timeline, event],
+    };
+    if (status === 'rejected' && note?.trim()) {
+      next.rejectionReason = note.trim();
+    }
+    await upsertDoc('orders', next);
+    return next;
+  },
 
-  convertToProduction: (...args: Parameters<typeof demoDb.convertToProduction>) =>
-    isDemoMode
-      ? demoDb.convertToProduction(...args)
-      : demoDb.convertToProduction(...args).then(async (order) => {
-          await upsertDoc('orders', order);
-          return order;
-        }),
+  async updateOrderPrice(id: string, price: number) {
+    if (isDemoMode) return demoDb.updateOrderPrice(id, price);
+    if (!Number.isFinite(price) || price <= 0) throw new Error('السعر يجب أن يكون أكبر من صفر');
+    const order = await readOrderDoc(id);
+    const now = new Date().toISOString();
+    const next: Order = {
+      ...order,
+      finalPrice: price,
+      estimatedPrice: price,
+      updatedAt: now,
+      timeline: [
+        ...order.timeline,
+        {
+          status: order.status,
+          label: 'تم التسعير',
+          at: now,
+          by: 'المبيعات',
+          note: `السعر النهائي ${formatCurrency(price)}`,
+        },
+      ],
+    };
+    await upsertDoc('orders', next);
+    return next;
+  },
+
+  async convertToProduction(id: string) {
+    if (isDemoMode) return demoDb.convertToProduction(id);
+    const current = await readOrderDoc(id);
+    if (!isOrderPriced(current)) {
+      throw new Error('سعّر الطلب أولاً قبل إرساله للمصنع');
+    }
+    if (current.status !== 'approved') {
+      throw new Error('اعتمد الطلب بعد التسعير ثم أرسله للمصنع');
+    }
+    const order = await this.updateOrderStatus(id, 'sent_to_factory', 'أُرسل للمصنع بعد التسعير');
+    const now = new Date().toISOString();
+    const existing = (await this.listProductionOrders()).find((p) => p.orderId === order.id);
+    if (!existing) {
+      const po: ProductionOrder = {
+        id: generateId('po'),
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        status: 'sent_to_factory',
+        createdAt: now,
+        updatedAt: now,
+      };
+      await upsertDoc('productionOrders', po);
+    }
+    return order;
+  },
 
   async listProducts() {
-    if (isDemoMode) return getDemoState().products;
-    return listCollection<Product>('products');
+    if (isDemoMode) return getDemoState().products.map(normalizeOffering);
+    const rows = await listCollection<Product>('products');
+    return rows.map(normalizeOffering);
   },
   saveProduct: (input: Parameters<typeof demoDb.saveProduct>[0]) =>
     isDemoMode
@@ -258,13 +378,60 @@ export const dataService = {
   },
 
   async listCustomers() {
-    if (isDemoMode) return getDemoState().customers;
-    return listCollection<Customer>('customers');
+    if (isDemoMode) {
+      return mergeCustomersFromOrders(getDemoState().customers, getDemoState().orders);
+    }
+    const [customers, orders, appUsers] = await Promise.all([
+      listCollection<Customer>('customers'),
+      listCollection<Order>('orders'),
+      listCollection<{
+        id: string;
+        phone?: string;
+        name?: string;
+        governorate?: string;
+        city?: string;
+        address?: string;
+        createdAt?: string;
+        updatedAt?: string;
+      }>('users'),
+    ]);
+    const fromUsers = appUsers.map(customerFromAppUser);
+    const merged = mergeCustomersFromOrders([...customers, ...fromUsers], orders);
+    const known = new Set(customers.map((c) => c.id));
+    for (const customer of merged) {
+      if (!known.has(customer.id)) {
+        void upsertDoc('customers', customer);
+      }
+    }
+    return merged;
   },
-  saveCustomer: (input: Parameters<typeof demoDb.saveCustomer>[0]) =>
-    isDemoMode
-      ? demoDb.saveCustomer(input)
-      : demoDb.saveCustomer(input).then((c) => upsertDoc('customers', c)),
+  async saveCustomer(input: Parameters<typeof demoDb.saveCustomer>[0]) {
+    if (isDemoMode) return demoDb.saveCustomer(input);
+    const saved = await demoDb.saveCustomer(input).then((c) => upsertDoc('customers', c));
+    const db = getFirebaseDb();
+    if (db) {
+      try {
+        const userSnap = await getDoc(doc(db, 'users', saved.id));
+        if (userSnap.exists()) {
+          await setDoc(
+            doc(db, 'users', saved.id),
+            stripUndefined({
+              name: saved.name,
+              phone: saved.phone,
+              governorate: saved.governorate ?? '',
+              city: saved.city ?? '',
+              address: saved.addresses?.[0]?.address ?? '',
+              updatedAt: saved.updatedAt,
+            }),
+            { merge: true },
+          );
+        }
+      } catch {
+        // حساب التطبيق اختياري — ملف العميل يبقى محفوظ
+      }
+    }
+    return saved;
+  },
   deleteCustomer: async (id: string) => {
     if (isDemoMode) return demoDb.deleteCustomer(id);
     const db = getFirebaseDb();
@@ -353,35 +520,229 @@ export const dataService = {
 
   async listProductionOrders(): Promise<ProductionOrder[]> {
     if (isDemoMode) return demoDb.listProductionOrders();
-    return listCollection<ProductionOrder>('productionOrders');
+    try {
+      return await listCollection<ProductionOrder>('productionOrders');
+    } catch (err) {
+      console.warn('[factory] productionOrders read failed', err);
+      return [];
+    }
   },
-  updateProductionStatus: (...args: Parameters<typeof demoDb.updateProductionStatus>) =>
-    isDemoMode
-      ? demoDb.updateProductionStatus(...args)
-      : demoDb.updateProductionStatus(...args).then(async (po) => {
-          await upsertDoc('productionOrders', po);
-          const order = await demoDb.getOrder(po.orderId);
-          await upsertDoc('orders', order);
-          return po;
-        }),
+
+  async updateProductionStatus(id: string, status: OrderStatus, notes?: string) {
+    if (isDemoMode) return demoDb.updateProductionStatus(id, status, notes);
+    const db = getFirebaseDb();
+    if (!db) throw new Error('Firestore غير متاح');
+
+    let po: ProductionOrder | null = null;
+    const byId = await getDoc(doc(db, 'productionOrders', id));
+    if (byId.exists()) {
+      po = { id: byId.id, ...byId.data() } as ProductionOrder;
+    } else {
+      const all = await this.listProductionOrders();
+      po = all.find((p) => p.id === id || p.orderId === id) ?? null;
+    }
+    if (!po) {
+      // Fallback: treat id as orderId and create PO on the fly
+      const order = await readOrderDoc(id);
+      const now = new Date().toISOString();
+      po = {
+        id: `po-${Date.now()}`,
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        status: order.status,
+        createdAt: now,
+        updatedAt: now,
+      };
+    }
+
+    const now = new Date().toISOString();
+    const nextPo: ProductionOrder = {
+      ...po,
+      status,
+      updatedAt: now,
+      ...(notes?.trim() ? { notes: notes.trim() } : {}),
+      ...(status === 'in_production' && !po.startedAt ? { startedAt: now } : {}),
+      ...(status === 'ready' ? { readyAt: now } : {}),
+    };
+    await upsertDoc('productionOrders', nextPo);
+    await this.updateOrderStatus(po.orderId, status, notes ?? 'تحديث من أرضية المصنع');
+    return nextPo;
+  },
 
   async listInventory(): Promise<InventoryItem[]> {
     if (isDemoMode) return demoDb.listInventory();
-    return listCollection<InventoryItem>('inventory');
+    const items = await listCollection<InventoryItem>('inventory');
+    return items
+      .map((i) => ({
+        ...i,
+        quantity: Number(i.quantity) || 0,
+        reorderLevel: Number(i.reorderLevel) || 0,
+        nameAr: i.nameAr || i.name || i.sku,
+        unit: i.unit || 'قطعة',
+      }))
+      .sort((a, b) => {
+        const aLow = a.quantity <= a.reorderLevel ? 0 : 1;
+        const bLow = b.quantity <= b.reorderLevel ? 0 : 1;
+        if (aLow !== bLow) return aLow - bLow;
+        return (a.nameAr || '').localeCompare(b.nameAr || '', 'ar');
+      });
   },
   async listInventoryTransactions(): Promise<InventoryTransaction[]> {
     if (isDemoMode) return demoDb.listInventoryTransactions();
-    return listCollection<InventoryTransaction>('inventoryTransactions');
+    try {
+      const rows = await listCollection<InventoryTransaction>('inventoryTransactions');
+      return rows.sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
+    } catch {
+      return [];
+    }
   },
-  adjustInventory: (...args: Parameters<typeof demoDb.adjustInventory>) =>
-    isDemoMode
-      ? demoDb.adjustInventory(...args)
-      : demoDb.adjustInventory(...args).then((item) => upsertDoc('inventory', item)),
-  confirmMaterialConsumption: (...args: Parameters<typeof demoDb.confirmMaterialConsumption>) =>
-    isDemoMode
-      ? demoDb.confirmMaterialConsumption(...args)
-      : demoDb.confirmMaterialConsumption(...args).then(async (items) => {
-          await Promise.all(items.map((i) => upsertDoc('inventory', i)));
-          return items;
-        }),
+
+  async adjustInventory(id: string, quantity: number, note?: string) {
+    if (isDemoMode) return demoDb.adjustInventory(id, quantity, note);
+    const db = getFirebaseDb();
+    if (!db) throw new Error('Firestore غير متاح');
+    const snap = await getDoc(doc(db, 'inventory', id));
+    if (!snap.exists()) throw new Error('الصنف غير موجود');
+    const item = { id: snap.id, ...snap.data() } as InventoryItem;
+    const now = new Date().toISOString();
+    const delta = quantity - item.quantity;
+    const next: InventoryItem = { ...item, quantity, updatedAt: now };
+    await upsertDoc('inventory', next);
+    await upsertDoc('inventoryTransactions', {
+      id: `txn-${Date.now()}`,
+      inventoryId: id,
+      type: delta >= 0 ? 'in' : 'out',
+      quantity: Math.abs(delta),
+      note: note ?? 'تعديل يدوي',
+      createdAt: now,
+    });
+    return next;
+  },
+
+  async confirmMaterialConsumption(
+    orderNumber: string,
+    deductions: { inventoryId: string; quantity: number }[],
+  ) {
+    if (isDemoMode) return demoDb.confirmMaterialConsumption(orderNumber, deductions);
+    const db = getFirebaseDb();
+    if (!db) throw new Error('Firestore غير متاح');
+    const now = new Date().toISOString();
+    const updated: InventoryItem[] = [];
+    const warnings: string[] = [];
+    for (const d of deductions) {
+      if (d.quantity <= 0) continue;
+      const snap = await getDoc(doc(db, 'inventory', d.inventoryId));
+      if (!snap.exists()) continue;
+      const item = { id: snap.id, ...snap.data() } as InventoryItem;
+      if (item.quantity < d.quantity) {
+        throw new Error(
+          `المخزن ما يكفي لـ ${item.nameAr}: متوفر ${item.quantity} ${item.unit}، مطلوب ${d.quantity}`,
+        );
+      }
+      const next: InventoryItem = {
+        ...item,
+        quantity: item.quantity - d.quantity,
+        updatedAt: now,
+      };
+      if (next.quantity <= next.reorderLevel) {
+        warnings.push(
+          `${next.nameAr}: تبقى ${next.quantity} ${next.unit} — حد التنبيه ${next.reorderLevel}`,
+        );
+      }
+      await upsertDoc('inventory', next);
+      await upsertDoc('inventoryTransactions', {
+        id: generateId('txn'),
+        inventoryId: d.inventoryId,
+        type: 'out',
+        quantity: d.quantity,
+        reference: orderNumber,
+        note: `استهلاك لأمر ${orderNumber}`,
+        createdAt: now,
+      });
+      updated.push(next);
+    }
+    return { items: updated, warnings };
+  },
+
+  async issueExecutionOrder(input: {
+    orderId: string;
+    materials: { inventoryId: string; quantity: number }[];
+    notes?: string;
+  }) {
+    if (isDemoMode) return demoDb.issueExecutionOrder(input);
+    const order = await readOrderDoc(input.orderId);
+    if (!['sent_to_factory', 'in_production'].includes(order.status)) {
+      throw new Error('الطلب لازم يكون واصل للمصنع أولاً');
+    }
+    const deductions = input.materials.filter((m) => m.quantity > 0);
+    if (!deductions.length) throw new Error('حدد المواد والكميات المستخدمة');
+
+    const result = await this.confirmMaterialConsumption(order.orderNumber, deductions);
+    const inventory = await this.listInventory();
+    const materials: ProductionMaterial[] = deductions.map((d) => {
+      const item = inventory.find((i) => i.id === d.inventoryId);
+      return {
+        inventoryId: d.inventoryId,
+        nameAr: item?.nameAr ?? d.inventoryId,
+        sku: item?.sku ?? '',
+        unit: item?.unit ?? 'قطعة',
+        quantity: d.quantity,
+      };
+    });
+
+    const now = new Date().toISOString();
+    const allPo = await this.listProductionOrders();
+    const existing = allPo.find((p) => p.orderId === order.id);
+    const po: ProductionOrder = {
+      id: existing?.id ?? generateId('po'),
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      status: 'in_production',
+      startedAt: existing?.startedAt ?? now,
+      notes: input.notes,
+      materials: [...(existing?.materials ?? []), ...materials],
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    await upsertDoc('productionOrders', po);
+    await this.updateOrderStatus(order.id, 'in_production', 'أمر تنفيذ مع خصم مواد المخزن');
+    return { production: po, warnings: result.warnings };
+  },
+
+  async saveInventory(
+    input: Partial<InventoryItem> & Pick<InventoryItem, 'nameAr' | 'quantity' | 'unit' | 'reorderLevel'>,
+  ) {
+    if (isDemoMode) return demoDb.saveInventory(input);
+    const now = new Date().toISOString();
+    const id = input.id || generateId('inv');
+    const existing = input.id ? (await this.listInventory()).find((i) => i.id === id) : undefined;
+    const item: InventoryItem = {
+      id,
+      sku: input.sku?.trim() || existing?.sku || `SKU-${id.slice(-6).toUpperCase()}`,
+      name: input.name || input.nameAr,
+      nameAr: input.nameAr,
+      quantity: Number(input.quantity) || 0,
+      unit: input.unit || 'قطعة',
+      reorderLevel: Number(input.reorderLevel) || 0,
+      updatedAt: now,
+    };
+    await upsertDoc('inventory', item);
+    if (!existing) {
+      await upsertDoc('inventoryTransactions', {
+        id: generateId('txn'),
+        inventoryId: id,
+        type: 'in',
+        quantity: item.quantity,
+        note: `إضافة صنف جديد — حد التنبيه ${item.reorderLevel} ${item.unit}`,
+        createdAt: now,
+      });
+    }
+    return item;
+  },
+
+  async deleteInventory(id: string) {
+    if (isDemoMode) return demoDb.deleteInventory(id);
+    const db = getFirebaseDb();
+    if (db) await deleteDoc(doc(db, 'inventory', id));
+  },
 };

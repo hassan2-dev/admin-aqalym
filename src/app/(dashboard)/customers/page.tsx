@@ -15,7 +15,7 @@ export default function CustomersPage() {
   return (
     <CrudPage<Customer>
       title="العملاء"
-      description="ملفات العملاء والمشاريع المرتبطة وسجل الطلبات"
+      description="كل من يسجّل بالتطبيق أو يطلب يصير عميل، وبياناته محفوظة هنا"
       headers={['الاسم', 'الهاتف', 'المحافظة', 'المدينة']}
       items={data}
       loading={isLoading}

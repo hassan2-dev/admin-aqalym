@@ -1,6 +1,7 @@
 'use client';
 
 import { CrudPage, money } from '@/presentation/components/shared/crud-page';
+import { parseIqdNumber } from '@/shared/lib/utils';
 import { useCrudMutation, useProducts, useVariants } from '@/presentation/hooks/use-data';
 import { dataService } from '@/infrastructure/repositories/data-service';
 import type { Variant } from '@/domain/entities';
@@ -29,7 +30,7 @@ export default function VariantsPage() {
           required: true,
           options: (products.data ?? []).map((p) => ({ value: p.id, label: p.nameAr })),
         },
-        { name: 'price', label: 'السعر', type: 'number', required: true },
+        { name: 'price', label: 'السعر', type: 'money', required: true },
         { name: 'minimumWidth', label: 'أقل عرض', type: 'number' },
         { name: 'maximumWidth', label: 'أعلى عرض', type: 'number' },
         { name: 'minimumHeight', label: 'أقل ارتفاع', type: 'number' },
@@ -55,7 +56,7 @@ export default function VariantsPage() {
           nameAr: values.nameAr!,
           name: values.nameAr!,
           productId: values.productId!,
-          price: Number(values.price || 0),
+          price: parseIqdNumber(values.price || '0'),
           minimumWidth: values.minimumWidth ? Number(values.minimumWidth) : undefined,
           maximumWidth: values.maximumWidth ? Number(values.maximumWidth) : undefined,
           minimumHeight: values.minimumHeight ? Number(values.minimumHeight) : undefined,

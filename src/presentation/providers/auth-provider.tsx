@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { StaffUser } from '@/domain/entities';
 import type { Permission } from '@/domain/enums';
 import { demoDb } from '@/infrastructure/demo/store';
@@ -11,7 +12,7 @@ interface AuthContextValue {
   user: StaffUser | null;
   permissions: Permission[];
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<StaffUser>;
   logout: () => Promise<void>;
   can: (permission: Permission) => boolean;
 }
@@ -19,6 +20,7 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<StaffUser | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -53,12 +55,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(async (email: string, password: string) => {
     const u = await authService.login(email, password);
     setUser(u);
+    return u;
   }, []);
 
   const logout = useCallback(async () => {
     await authService.logout();
+    queryClient.clear();
     setUser(null);
-  }, []);
+  }, [queryClient]);
 
   const can = useCallback((permission: Permission) => permissions.includes(permission), [permissions]);
 

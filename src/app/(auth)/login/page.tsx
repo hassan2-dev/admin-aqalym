@@ -12,6 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/pre
 import { useAuth } from '@/presentation/providers/auth-provider';
 import { ar } from '@/presentation/i18n/ar';
 import { BRAND } from '@/shared/constants/brand';
+import { HOME_PATH_BY_ROLE } from '@/shared/constants/permissions';
 import { isDemoMode } from '@/infrastructure/firebase/client';
 
 export default function LoginPage() {
@@ -25,9 +26,9 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      await login(email, password);
+      const u = await login(email, password);
       toast.success('تم تسجيل الدخول بنجاح');
-      router.replace('/');
+      router.replace(HOME_PATH_BY_ROLE[u.roleSlug] ?? '/');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'فشل تسجيل الدخول');
     } finally {

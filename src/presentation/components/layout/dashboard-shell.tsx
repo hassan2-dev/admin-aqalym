@@ -4,8 +4,13 @@ import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Menu } from 'lucide-react';
 import { Sidebar } from '@/presentation/components/layout/sidebar';
+import { NavigationPendingProvider } from '@/presentation/components/layout/navigation-pending';
+import {
+  NavigationOverlay,
+  NavigationProgress,
+} from '@/presentation/components/layout/navigation-progress';
 import { useAuth } from '@/presentation/providers/auth-provider';
-import { ROUTE_PERMISSIONS } from '@/shared/constants/permissions';
+import { HOME_PATH_BY_ROLE, ROUTE_PERMISSIONS } from '@/shared/constants/permissions';
 import { Skeleton } from '@/presentation/components/ui/skeleton';
 import { Button } from '@/presentation/components/ui/button';
 import { ar } from '@/presentation/i18n/ar';
@@ -36,12 +41,12 @@ function resolveTitle(pathname: string) {
   if (pathname.startsWith('/customers/')) return ar.customers;
   if (pathname.startsWith('/factory/')) return ar.factory;
   const exact = Object.entries(PAGE_TITLES).find(([route]) =>
-    route === '/' ? pathname === '/' : pathname === route || pathname.startsWith(`${route}/`)
+    route === '/' ? pathname === '/' : pathname === route || pathname.startsWith(`${route}/`),
   );
   return exact?.[1] ?? ar.adminPanel;
 }
 
-export function DashboardShell({ children }: { children: React.ReactNode }) {
+function ShellInner({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const { user, loading, can } = useAuth();
   const router = useRouter();
@@ -50,6 +55,12 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!loading && !user) router.replace('/login');
   }, [loading, user, router]);
+
+  useEffect(() => {
+    if (loading || !user) return;
+    const home = HOME_PATH_BY_ROLE[user.roleSlug];
+    if (home && pathname === '/') router.replace(home);
+  }, [loading, user, pathname, router]);
 
   useEffect(() => {
     setOpen(false);
@@ -71,7 +82,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (required && !can(required)) {
+  const home = HOME_PATH_BY_ROLE[user.roleSlug];
+  if (required && !can(required) && !(home && pathname === '/')) {
     return (
       <div className="flex min-h-screen items-center justify-center p-8 text-center">
         <div>
@@ -86,10 +98,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="h-dvh overflow-hidden bg-background">
-      <Sidebar open={open} onClose={() => setOpen(false)} />
+      <div className="no-print">
+        <NavigationProgress />
+        <Sidebar open={open} onClose={() => setOpen(false)} />
+      </div>
 
       {/* mr وليس me: السايد بار يمين، فالهامش يجب أن يكون يمين أيضاً في RTL */}
-      <div className="flex h-dvh flex-col lg:mr-[260px]">
+      <div id="app-shell" className="flex h-dvh flex-col lg:mr-[260px]">
         <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card px-4 no-print lg:hidden">
           <Button
             variant="outline"
@@ -102,10 +117,21 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           <p className="truncate text-sm font-semibold">{title}</p>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="relative min-h-0 flex-1 overflow-y-auto">
+          <div className="no-print">
+            <NavigationOverlay />
+          </div>
           <main className="p-4 md:p-6 lg:p-8">{children}</main>
         </div>
       </div>
     </div>
+  );
+}
+
+export function DashboardShell({ children }: { children: React.ReactNode }) {
+  return (
+    <NavigationPendingProvider>
+      <ShellInner>{children}</ShellInner>
+    </NavigationPendingProvider>
   );
 }

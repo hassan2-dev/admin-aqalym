@@ -42,7 +42,10 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="الإعدادات" description="بيانات الشركة وFirebase وOTP والتخزين" />
+      <PageHeader
+        title="الإعدادات"
+        description="بيانات الشركة وFirebase وتخزين الصور — OTP خاص بتطبيق الموبايل فقط"
+      />
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card className="rounded-xl shadow-soft">
@@ -101,11 +104,15 @@ export default function SettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>إعدادات OTP</CardTitle>
+            <CardTitle>OTP تطبيق الموبايل</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <p className="rounded-xl bg-muted p-3 text-xs text-muted-foreground">
+              حالياً للتطوير: `OTP_DEV_FIXED=true` → الرمز الثابت <strong>123456</strong> بدون OTPIQ.
+              للإنتاج: `OTP_DEV_FIXED=false` + `OTPIQ_API_KEY`. لوحة التحكم تبقى إيميل/باسورد.
+            </p>
             <div className="flex items-center justify-between">
-              <Label>تفعيل OTP</Label>
+              <Label>تفعيل OTP (الموبايل)</Label>
               <Switch checked={form.otpEnabled} onCheckedChange={(v) => set('otpEnabled', v)} />
             </div>
             <Field label="طول الرمز">

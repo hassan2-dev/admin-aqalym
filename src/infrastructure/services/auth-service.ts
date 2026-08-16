@@ -1,9 +1,9 @@
+import type { User } from 'firebase/auth';
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
-  type User,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import type { StaffUser } from '@/domain/entities';
@@ -16,6 +16,18 @@ async function fetchStaffProfile(uid: string): Promise<StaffUser | null> {
   const snap = await getDoc(doc(db, 'staff', uid));
   if (!snap.exists()) return null;
   return { id: snap.id, ...snap.data() } as StaffUser;
+}
+
+async function waitForFirebaseUser(): Promise<User | null> {
+  const auth = getFirebaseAuth();
+  if (!auth) return null;
+  if (auth.currentUser) return auth.currentUser;
+  return new Promise((resolve) => {
+    const unsub = onAuthStateChanged(auth, (firebaseUser) => {
+      unsub();
+      resolve(firebaseUser);
+    });
+  });
 }
 
 export const authService = {
@@ -44,9 +56,9 @@ export const authService = {
 
   async getCurrentUser(): Promise<StaffUser | null> {
     if (isDemoMode) return demoDb.currentUser();
-    const auth = getFirebaseAuth();
-    if (!auth?.currentUser) return null;
-    return fetchStaffProfile(auth.currentUser.uid);
+    const firebaseUser = await waitForFirebaseUser();
+    if (!firebaseUser) return null;
+    return fetchStaffProfile(firebaseUser.uid);
   },
 
   onAuthChanged(callback: (user: StaffUser | null) => void) {

@@ -29,6 +29,7 @@ import {
   ChevronDown,
   Moon,
   Sun,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { ar } from '@/presentation/i18n/ar';
@@ -37,12 +38,14 @@ import type { Permission } from '@/domain/enums';
 import { ROLE_LABELS } from '@/domain/enums';
 import { BRAND } from '@/shared/constants/brand';
 import { Button } from '@/presentation/components/ui/button';
+import { useNavigationPending } from '@/presentation/components/layout/navigation-pending';
 
 type NavItem = {
   href: string;
   label: string;
   icon: typeof LayoutDashboard;
   permission: Permission;
+  hideFor?: Array<'sales' | 'factory'>;
 };
 
 type NavGroup = {
@@ -56,12 +59,12 @@ const navGroups: NavGroup[] = [
   {
     id: 'operations',
     items: [
-      { href: '/', label: ar.dashboard, icon: LayoutDashboard, permission: 'dashboard.view' },
-      { href: '/orders', label: ar.orders, icon: ShoppingCart, permission: 'orders.view' },
-      { href: '/products', label: ar.products, icon: Package, permission: 'products.view' },
-      { href: '/factory', label: ar.factory, icon: Factory, permission: 'orders.production' },
-      { href: '/inventory', label: ar.inventory, icon: Warehouse, permission: 'inventory.manage' },
-      { href: '/customers', label: ar.customers, icon: Users, permission: 'customers.view' },
+      { href: '/', label: ar.dashboard, icon: LayoutDashboard, permission: 'dashboard.view', hideFor: ['factory'] },
+      { href: '/orders', label: ar.orders, icon: ShoppingCart, permission: 'orders.view', hideFor: ['factory'] },
+      { href: '/products', label: ar.products, icon: Package, permission: 'products.view', hideFor: ['factory'] },
+      { href: '/factory', label: 'تصنيع', icon: Factory, permission: 'orders.production', hideFor: ['sales'] },
+      { href: '/inventory', label: 'مخزن', icon: Warehouse, permission: 'inventory.manage', hideFor: ['sales'] },
+      { href: '/customers', label: ar.customers, icon: Users, permission: 'customers.view', hideFor: ['factory'] },
     ],
   },
   {
@@ -82,7 +85,7 @@ const navGroups: NavGroup[] = [
     label: ar.navBusiness,
     items: [
       { href: '/projects', label: ar.projects, icon: Building2, permission: 'projects.view' },
-      { href: '/reports', label: ar.reports, icon: BarChart3, permission: 'reports.view' },
+      { href: '/reports', label: ar.reports, icon: BarChart3, permission: 'finance.view' },
     ],
   },
   {
@@ -105,10 +108,48 @@ function groupHasActive(pathname: string, group: NavGroup) {
   return group.items.some((item) => isActive(pathname, item.href));
 }
 
+function SidebarNavLink({
+  item,
+  active,
+  pending,
+  onNavigate,
+}: {
+  item: NavItem;
+  active: boolean;
+  pending: boolean;
+  onNavigate: () => void;
+}) {
+  const Icon = item.icon;
+  return (
+    <Link
+      href={item.href}
+        prefetch={false}
+        onClick={onNavigate}
+      aria-current={active ? 'page' : undefined}
+      aria-busy={pending || undefined}
+      className={cn(
+        'flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors',
+        active || pending
+          ? 'bg-sidebar-active text-white'
+          : 'text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground',
+        pending && 'ring-1 ring-accent/40',
+      )}
+    >
+      {pending ? (
+        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-accent" />
+      ) : (
+        <Icon className={cn('h-4 w-4 shrink-0', active ? 'text-accent' : 'opacity-80')} />
+      )}
+      <span className="truncate">{item.label}</span>
+    </Link>
+  );
+}
+
 export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   const pathname = usePathname();
   const { can, logout, user } = useAuth();
   const { theme, setTheme } = useTheme();
+  const { pendingHref, startNavigation } = useNavigationPending();
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
     const next: Record<string, boolean> = {};
@@ -135,6 +176,11 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
       .map((p) => p[0])
       .join('') || '؟';
 
+  const go = (href: string) => {
+    startNavigation(href);
+    onClose();
+  };
+
   return (
     <>
       <div
@@ -145,7 +191,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
       <aside
         className={cn(
           'fixed inset-y-0 right-0 z-50 flex h-dvh w-[260px] flex-col bg-sidebar text-sidebar-foreground shadow-xl transition-transform duration-200 lg:shadow-none',
-          open ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
+          open ? 'translate-x-0' : 'translate-x-full lg:translate-x-0',
         )}
       >
         <div className="flex h-16 shrink-0 items-center gap-3 px-4">
@@ -171,10 +217,10 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
           </button>
         </div>
 
-        {(can('orders.create') || can('orders.view')) && (
+        {(can('orders.create')) && (
           <div className="shrink-0 px-3 pb-3">
             <Button asChild variant="accent" size="sm" className="h-9 w-full rounded-lg text-sm">
-              <Link href="/orders/new" onClick={onClose}>
+              <Link href="/orders/new" prefetch={false} onClick={() => go('/orders/new')}>
                 <Plus className="h-4 w-4" />
                 {ar.newOrder}
               </Link>
@@ -184,7 +230,13 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
 
         <nav className="sidebar-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-2">
           {navGroups.map((group) => {
-            const visible = group.items.filter((item) => can(item.permission));
+            const visible = group.items.filter((item) => {
+              if (!can(item.permission)) return false;
+              if (item.hideFor && user?.roleSlug && item.hideFor.includes(user.roleSlug as 'sales' | 'factory')) {
+                return false;
+              }
+              return true;
+            });
             if (!visible.length) return null;
             const isCollapsed = Boolean(group.collapsible && collapsed[group.id]);
 
@@ -195,7 +247,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
                     type="button"
                     className={cn(
                       'mb-1 flex w-full items-center justify-between px-2.5 py-1 text-[11px] font-medium text-sidebar-muted',
-                      group.collapsible && 'hover:text-sidebar-foreground'
+                      group.collapsible && 'hover:text-sidebar-foreground',
                     )}
                     onClick={() =>
                       group.collapsible &&
@@ -207,7 +259,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
                       <ChevronDown
                         className={cn(
                           'h-3.5 w-3.5 transition-transform',
-                          isCollapsed && '-rotate-90'
+                          isCollapsed && '-rotate-90',
                         )}
                       />
                     ) : null}
@@ -218,27 +270,15 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
                   <ul className="space-y-0.5">
                     {visible.map((item) => {
                       const active = isActive(pathname, item.href);
-                      const Icon = item.icon;
+                      const pending = pendingHref === item.href;
                       return (
                         <li key={item.href}>
-                          <Link
-                            href={item.href}
-                            onClick={onClose}
-                            className={cn(
-                              'flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors',
-                              active
-                                ? 'bg-sidebar-active text-white'
-                                : 'text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground'
-                            )}
-                          >
-                            <Icon
-                              className={cn(
-                                'h-4 w-4 shrink-0',
-                                active ? 'text-accent' : 'opacity-80'
-                              )}
-                            />
-                            <span className="truncate">{item.label}</span>
-                          </Link>
+                          <SidebarNavLink
+                            item={item}
+                            active={active}
+                            pending={pending}
+                            onNavigate={() => go(item.href)}
+                          />
                         </li>
                       );
                     })}

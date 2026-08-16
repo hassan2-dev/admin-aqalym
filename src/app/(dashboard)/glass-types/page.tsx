@@ -1,6 +1,7 @@
 'use client';
 
 import { CrudPage, money } from '@/presentation/components/shared/crud-page';
+import { parseIqdNumber } from '@/shared/lib/utils';
 import { useCrudMutation, useGlass } from '@/presentation/hooks/use-data';
 import { dataService } from '@/infrastructure/repositories/data-service';
 import type { GlassType } from '@/domain/entities';
@@ -23,7 +24,7 @@ export default function GlassTypesPage() {
         { name: 'nameAr', label: 'الاسم', required: true },
         { name: 'thickness', label: 'السماكة (مم)', type: 'number' },
         { name: 'color', label: 'اللون' },
-        { name: 'pricePerSqm', label: 'السعر / م²', type: 'number', required: true },
+        { name: 'pricePerSqm', label: 'السعر / م²', type: 'money', required: true },
         { name: 'descriptionAr', label: 'الوصف', type: 'textarea' },
         { name: 'image', label: 'رابط الصورة' },
       ]}
@@ -43,7 +44,7 @@ export default function GlassTypesPage() {
           name: values.nameAr!,
           thickness: values.thickness ? Number(values.thickness) : undefined,
           color: values.color,
-          pricePerSqm: Number(values.pricePerSqm || 0),
+          pricePerSqm: parseIqdNumber(values.pricePerSqm || '0'),
           descriptionAr: values.descriptionAr ?? '',
           description: values.descriptionAr ?? '',
           image: values.image,

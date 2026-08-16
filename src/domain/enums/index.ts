@@ -12,7 +12,16 @@ export type OrderStatus =
 
 export type ProductKind = 'ready' | 'custom';
 export type OrderKind = 'ready' | 'custom';
-export type CategorySlug = 'doors' | 'windows' | 'facades' | 'fixed_glass' | 'shutters';
+export type OfferingType = 'product' | 'service';
+export type PricingMode =
+  | 'fixed'
+  | 'per_area'
+  | 'per_length'
+  | 'per_quantity'
+  | 'sales_quote'
+  | 'none';
+export type MeasurementKey = 'width' | 'height' | 'length' | 'area' | 'depth' | 'quantity';
+export type CategorySlug = 'doors' | 'windows' | 'facades' | 'fixed_glass' | 'shutters' | 'services';
 export type StaffStatus = 'active' | 'inactive' | 'suspended';
 export type InventoryTxnType = 'in' | 'out' | 'adjust';
 export type NotificationChannel = 'system' | 'push' | 'otp';
@@ -48,6 +57,7 @@ export type Permission =
   | 'projects.view'
   | 'projects.manage'
   | 'reports.view'
+  | 'finance.view'
   | 'users.view'
   | 'users.manage'
   | 'roles.manage'
@@ -79,6 +89,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   'projects.view',
   'projects.manage',
   'reports.view',
+  'finance.view',
   'users.view',
   'users.manage',
   'roles.manage',
@@ -102,9 +113,9 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 };
 
 export const ROLE_LABELS: Record<RoleSlug, string> = {
-  super_admin: 'مشرف أعلى',
+  super_admin: 'المشرف العام',
   admin: 'مدير',
-  sales: 'مبيعات',
+  sales: 'المبيعات',
   factory: 'المصنع',
   warehouse: 'المستودع',
   support: 'دعم العملاء',

@@ -12,6 +12,7 @@ import { Button } from '@/presentation/components/ui/button';
 import { Skeleton } from '@/presentation/components/ui/skeleton';
 import { useCustomers, useOrders } from '@/presentation/hooks/use-data';
 import { formatCurrency, formatDate } from '@/shared/lib/utils';
+import { orderBelongsToCustomer } from '@/shared/lib/customers';
 import { Wallet, ShoppingCart } from 'lucide-react';
 
 export default function CustomerDetailsPage({ params }: { params: Promise<{ id: string }> }) {
@@ -19,7 +20,9 @@ export default function CustomerDetailsPage({ params }: { params: Promise<{ id: 
   const customers = useCustomers();
   const orders = useOrders();
   const customer = customers.data?.find((c) => c.id === id);
-  const history = (orders.data ?? []).filter((o) => o.customerId === id);
+  const history = customer
+    ? (orders.data ?? []).filter((o) => orderBelongsToCustomer(o, customer))
+    : [];
 
   if (customers.isLoading) return <Skeleton className="h-96 w-full rounded-xl" />;
   if (!customer) return <p className="text-muted-foreground">العميل غير موجود</p>;

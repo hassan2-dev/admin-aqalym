@@ -17,6 +17,7 @@ import { useCatalogs, useCrudMutation, useProducts } from '@/presentation/hooks/
 import { dataService } from '@/infrastructure/repositories/data-service';
 import type { ProductSpec, SpecCatalog } from '@/domain/entities';
 import { useAuth } from '@/presentation/providers/auth-provider';
+import { SpecEditor } from '@/presentation/components/shared/spec-editor';
 import { cn } from '@/shared/lib/utils';
 
 const emptySpec = (): ProductSpec => ({ label: '', value: '' });
@@ -105,7 +106,7 @@ export default function CatalogsPage() {
     <div className="space-y-6">
       <PageHeader
         title="كتالوجات المواصفات"
-        description="قوالب مواصفات قياسية مشتركة — المنتج يختار الكتالوج ويرث الميزات دون تعديل القالب"
+        description="قوالب جاهزة: اسم الخاصية وقيمتها بجملة واضحة حتى المشرف يعرف شنو ينضاف"
         actions={
           can('catalogs.manage') ? (
             <Button variant="accent" onClick={openCreate}>
@@ -218,50 +219,7 @@ export default function CatalogsPage() {
                 onChange={(e) => setDescriptionAr(e.target.value)}
               />
             </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>المواصفات القياسية</Label>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setSpecs((prev) => [...prev, emptySpec()])}
-                >
-                  <Plus className="h-3.5 w-3.5" /> إضافة
-                </Button>
-              </div>
-              {specs.map((s, i) => (
-                <div key={i} className="grid gap-2 rounded-xl border border-border p-3 sm:grid-cols-[1fr_1fr_auto]">
-                  <Input
-                    placeholder="الحقل (مثل: نظام الألمنيوم)"
-                    value={s.label}
-                    onChange={(e) =>
-                      setSpecs((prev) =>
-                        prev.map((row, idx) => (idx === i ? { ...row, label: e.target.value } : row))
-                      )
-                    }
-                  />
-                  <Input
-                    placeholder="القيمة القياسية"
-                    value={s.value}
-                    onChange={(e) =>
-                      setSpecs((prev) =>
-                        prev.map((row, idx) => (idx === i ? { ...row, value: e.target.value } : row))
-                      )
-                    }
-                  />
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    disabled={specs.length <= 1}
-                    onClick={() => setSpecs((prev) => prev.filter((_, idx) => idx !== i))}
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </div>
-              ))}
-            </div>
+            <SpecEditor specs={specs} onChange={setSpecs} title="مواصفات هذا الكتالوج" />
             <Button type="submit" className="w-full" variant="accent">
               حفظ الكتالوج
             </Button>
