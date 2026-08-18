@@ -56,7 +56,7 @@ Missing serviceAccountKey.json
 async function writeCollection(
   db: Firestore,
   name: string,
-  rows: Array<{ id: string } & Record<string, unknown>>,
+  rows: ReadonlyArray<{ id: string }>,
 ) {
   const batchSize = 400;
   let written = 0;
@@ -64,8 +64,10 @@ async function writeCollection(
     const chunk = rows.slice(i, i + batchSize);
     const batch = db.batch();
     for (const row of chunk) {
-      const { id, ...data } = row;
-      batch.set(db.collection(name).doc(id), data, { merge: true });
+      const data = Object.fromEntries(
+        Object.entries(row).filter(([key]) => key !== 'id'),
+      );
+      batch.set(db.collection(name).doc(row.id), data, { merge: true });
     }
     await batch.commit();
     written += chunk.length;
@@ -109,19 +111,19 @@ async function main() {
   const db = getFirestore();
 
   console.log('Writing catalog data...');
-  await writeCollection(db, 'roles', SEED_ROLES as Array<{ id: string } & Record<string, unknown>>);
-  await writeCollection(db, 'categories', SEED_CATEGORIES as Array<{ id: string } & Record<string, unknown>>);
-  await writeCollection(db, 'catalogs', SEED_CATALOGS as Array<{ id: string } & Record<string, unknown>>);
-  await writeCollection(db, 'products', SEED_PRODUCTS as Array<{ id: string } & Record<string, unknown>>);
-  await writeCollection(db, 'variants', SEED_VARIANTS as Array<{ id: string } & Record<string, unknown>>);
-  await writeCollection(db, 'glassTypes', SEED_GLASS as Array<{ id: string } & Record<string, unknown>>);
-  await writeCollection(db, 'accessories', SEED_ACCESSORIES as Array<{ id: string } & Record<string, unknown>>);
-  await writeCollection(db, 'services', SEED_SERVICES as Array<{ id: string } & Record<string, unknown>>);
-  await writeCollection(db, 'projects', SEED_PROJECTS as Array<{ id: string } & Record<string, unknown>>);
-  await writeCollection(db, 'customers', SEED_CUSTOMERS as Array<{ id: string } & Record<string, unknown>>);
-  await writeCollection(db, 'orders', SEED_ORDERS as Array<{ id: string } & Record<string, unknown>>);
-  await writeCollection(db, 'notifications', SEED_NOTIFICATIONS as Array<{ id: string } & Record<string, unknown>>);
-  await writeCollection(db, 'inventory', SEED_INVENTORY as Array<{ id: string } & Record<string, unknown>>);
+  await writeCollection(db, 'roles', SEED_ROLES);
+  await writeCollection(db, 'categories', SEED_CATEGORIES);
+  await writeCollection(db, 'catalogs', SEED_CATALOGS);
+  await writeCollection(db, 'products', SEED_PRODUCTS);
+  await writeCollection(db, 'variants', SEED_VARIANTS);
+  await writeCollection(db, 'glassTypes', SEED_GLASS);
+  await writeCollection(db, 'accessories', SEED_ACCESSORIES);
+  await writeCollection(db, 'services', SEED_SERVICES);
+  await writeCollection(db, 'projects', SEED_PROJECTS);
+  await writeCollection(db, 'customers', SEED_CUSTOMERS);
+  await writeCollection(db, 'orders', SEED_ORDERS);
+  await writeCollection(db, 'notifications', SEED_NOTIFICATIONS);
+  await writeCollection(db, 'inventory', SEED_INVENTORY);
 
   await db.collection('settings').doc('app').set(SEED_SETTINGS, { merge: true });
   console.log('  ✓ settings/app');

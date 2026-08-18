@@ -1,0 +1,7 @@
+.env*
+serviceAccountKey.json
+*-firebase-adminsdk-*.json
+*.pem
+.next
+node_modules
+README.md

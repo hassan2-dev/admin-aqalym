@@ -72,7 +72,17 @@ export function requiresMeasurementsOf(p: Partial<Product>): boolean {
   return p.kind !== 'ready';
 }
 
-export function normalizeOffering(raw: Product): Product {
+export type NormalizedOffering = Product & {
+  offeringType: OfferingType;
+  published: boolean;
+  sortOrder: number;
+  pricingMode: PricingMode;
+  requiresMeasurements: boolean;
+  measurementFields: MeasurementField[];
+  requiresLocation: boolean;
+};
+
+export function normalizeOffering(raw: Product): NormalizedOffering {
   const offeringType: OfferingType = raw.offeringType ?? 'product';
   const requiresMeasurements = requiresMeasurementsOf(raw);
   const kind = deriveKind(requiresMeasurements);

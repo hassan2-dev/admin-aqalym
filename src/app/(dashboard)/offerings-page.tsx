@@ -231,7 +231,7 @@ export function OfferingsPage({
                   <div className="mb-1 flex items-center justify-between gap-2">
                     <p className="font-semibold">{p.nameAr}</p>
                     <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent">
-                      {OFFERING_TYPE_LABELS[p.offeringType]}
+                      {OFFERING_TYPE_LABELS[p.offeringType ?? 'product']}
                     </span>
                   </div>
                   <p className="text-xs text-muted-foreground">

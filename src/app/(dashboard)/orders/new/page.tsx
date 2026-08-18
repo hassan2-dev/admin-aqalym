@@ -314,7 +314,7 @@ export default function NewOrderPage() {
                     <div className="space-y-1.5 sm:col-span-2 lg:col-span-2">
                       <Label>سعر الوحدة (د.ع)</Label>
                       <MoneyInput
-                        value={line.unitPrice}
+                        value={String(line.unitPrice)}
                         onValueChange={(digits) =>
                           updateLine(line.key, {
                             unitPrice: digits,
