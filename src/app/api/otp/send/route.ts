@@ -12,6 +12,8 @@ import {
 
 export const runtime = 'nodejs';
 
+/** محلي/اختياري. الإنتاج يستخدم Firebase Cloud Functions + OTPIQ. */
+
 function hashCode(code: string): string {
   return createHash('sha256').update(code).digest('hex');
 }

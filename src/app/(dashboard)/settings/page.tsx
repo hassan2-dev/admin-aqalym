@@ -108,8 +108,10 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="rounded-xl bg-muted p-3 text-xs text-muted-foreground">
-              حالياً للتطوير: `OTP_DEV_FIXED=true` → الرمز الثابت <strong>123456</strong> بدون OTPIQ.
-              للإنتاج: `OTP_DEV_FIXED=false` + `OTPIQ_API_KEY`. لوحة التحكم تبقى إيميل/باسورد.
+              تطبيق الموبايل يرسل OTP عبر Firebase Cloud Functions + OTPIQ — بدون سيرفر باك إند.
+              المفتاح: `firebase functions:secrets:set OTPIQ_API_KEY` ثم `npm run otp:deploy`.
+              بالتطوير على الجهاز: `EXPO_PUBLIC_OTP_DEV_FIXED=true` → الرمز <strong>123456</strong>.
+              لوحة التحكم تبقى إيميل/باسورد.
             </p>
             <div className="flex items-center justify-between">
               <Label>تفعيل OTP (الموبايل)</Label>
