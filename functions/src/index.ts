@@ -22,9 +22,9 @@ import { isValidIraqiPhone, normalizeIraqiPhone, otpSessionId } from './phone';
 initializeApp();
 
 const REGION = 'europe-west1';
-const PLAY_REVIEW_PHONE = '+9647000000000';
-const PLAY_REVIEW_OTP = '482731';
 const otpiqApiKey = defineSecret('OTPIQ_API_KEY');
+const playReviewPhone = defineSecret('PLAY_REVIEW_PHONE');
+const playReviewOtp = defineSecret('PLAY_REVIEW_OTP');
 const otpiqProvider = defineString('OTPIQ_PROVIDER', {
   default: 'whatsapp-telegram-sms',
 });
@@ -47,7 +47,7 @@ const callOptions = {
 };
 
 export const sendOtp = onCall(
-  { ...callOptions, secrets: [otpiqApiKey] },
+  { ...callOptions, secrets: [otpiqApiKey, playReviewPhone, playReviewOtp] },
   async (request) => {
     let phoneForLog = '';
     const db = getFirestore();
@@ -61,7 +61,12 @@ export const sendOtp = onCall(
 
       const phone = normalizeIraqiPhone(raw);
       phoneForLog = phone;
-      const isPlayReview = phone === PLAY_REVIEW_PHONE;
+      const configuredReviewPhone = playReviewPhone.value().trim();
+      const configuredReviewOtp = playReviewOtp.value().trim();
+      const isPlayReview =
+        isValidIraqiPhone(configuredReviewPhone) &&
+        /^\d{4,8}$/.test(configuredReviewOtp) &&
+        phone === normalizeIraqiPhone(configuredReviewPhone);
       const apiKey = otpiqApiKey.value().trim();
       if (!isPlayReview && !apiKey) {
         throw new HttpsError(
@@ -121,7 +126,7 @@ export const sendOtp = onCall(
       }
 
       const code = isPlayReview
-        ? PLAY_REVIEW_OTP
+        ? configuredReviewOtp
         : String(randomInt(0, 10 ** length)).padStart(length, '0');
       const expiresAt = new Date(now.getTime() + expiryMinutes * 60_000).toISOString();
       const provider = (otpiqProvider.value() as OtpiqProvider) || 'whatsapp-telegram-sms';
@@ -201,7 +206,6 @@ export const verifyOtp = onCall(callOptions, async (request) => {
     }
 
     const phone = normalizeIraqiPhone(rawPhone);
-    const isPlayReview = phone === PLAY_REVIEW_PHONE;
     const db = getFirestore();
     const auth = getAuth();
     const sessionRef = db.collection('otpSessions').doc(otpSessionId(phone));
@@ -212,6 +216,7 @@ export const verifyOtp = onCall(callOptions, async (request) => {
     }
 
     const session = sessionSnap.data()!;
+    const isPlayReview = session.playReview === true;
     const expiresAt = new Date(String(session.expiresAt)).getTime();
     if (Number.isFinite(expiresAt) && Date.now() > expiresAt) {
       await sessionRef.delete();
