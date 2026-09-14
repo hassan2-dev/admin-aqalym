@@ -22,6 +22,8 @@ import { isValidIraqiPhone, normalizeIraqiPhone, otpSessionId } from './phone';
 initializeApp();
 
 const REGION = 'europe-west1';
+const PLAY_REVIEW_PHONE = '+9647000000000';
+const PLAY_REVIEW_OTP = '482731';
 const otpiqApiKey = defineSecret('OTPIQ_API_KEY');
 const otpiqProvider = defineString('OTPIQ_PROVIDER', {
   default: 'whatsapp-telegram-sms',
@@ -50,14 +52,6 @@ export const sendOtp = onCall(
     let phoneForLog = '';
     const db = getFirestore();
     try {
-      const apiKey = otpiqApiKey.value().trim();
-      if (!apiKey) {
-        throw new HttpsError(
-          'failed-precondition',
-          'OTPIQ_API_KEY غير مضبوط. شغّل: firebase functions:secrets:set OTPIQ_API_KEY',
-        );
-      }
-
       const raw = String(
         (request.data as { phone?: unknown } | undefined)?.phone ?? '',
       ).trim();
@@ -67,6 +61,14 @@ export const sendOtp = onCall(
 
       const phone = normalizeIraqiPhone(raw);
       phoneForLog = phone;
+      const isPlayReview = phone === PLAY_REVIEW_PHONE;
+      const apiKey = otpiqApiKey.value().trim();
+      if (!isPlayReview && !apiKey) {
+        throw new HttpsError(
+          'failed-precondition',
+          'OTPIQ_API_KEY غير مضبوط. شغّل: firebase functions:secrets:set OTPIQ_API_KEY',
+        );
+      }
 
       const settingsSnap = await db.collection('settings').doc('app').get();
       const settings = settingsSnap.data() as
@@ -87,43 +89,51 @@ export const sendOtp = onCall(
       let hourlyCount = 0;
       let windowStartIso = now.toISOString();
 
-      const rateSnap = await rateRef.get();
-      if (rateSnap.exists) {
-        const start = new Date(String(rateSnap.data()?.windowStart)).getTime();
-        if (Number.isFinite(start) && now.getTime() - start < hourMs) {
-          hourlyCount = Number(rateSnap.data()?.count) || 0;
-          windowStartIso = String(rateSnap.data()?.windowStart);
-          if (hourlyCount >= 3) {
-            const retryMin = Math.max(1, Math.ceil((hourMs - (now.getTime() - start)) / 60_000));
-            throw new HttpsError(
-              'resource-exhausted',
-              `هذا الرقم استنفد 3 رسائل بهالساعة. حاول بعد ${retryMin} دقيقة`,
-            );
+      if (!isPlayReview) {
+        const rateSnap = await rateRef.get();
+        if (rateSnap.exists) {
+          const start = new Date(String(rateSnap.data()?.windowStart)).getTime();
+          if (Number.isFinite(start) && now.getTime() - start < hourMs) {
+            hourlyCount = Number(rateSnap.data()?.count) || 0;
+            windowStartIso = String(rateSnap.data()?.windowStart);
+            if (hourlyCount >= 3) {
+              const retryMin = Math.max(1, Math.ceil((hourMs - (now.getTime() - start)) / 60_000));
+              throw new HttpsError(
+                'resource-exhausted',
+                `هذا الرقم استنفد 3 رسائل بهالساعة. حاول بعد ${retryMin} دقيقة`,
+              );
+            }
           }
         }
       }
 
-      const existing = await sessionRef.get();
-      if (existing.exists) {
-        const lastSentAt = existing.data()?.sentAt as string | undefined;
-        if (lastSentAt) {
-          const elapsed = Date.now() - new Date(lastSentAt).getTime();
-          if (elapsed < cooldownMs) {
-            throw new HttpsError('resource-exhausted', 'انتظر قليلاً قبل إعادة الإرسال');
+      if (!isPlayReview) {
+        const existing = await sessionRef.get();
+        if (existing.exists) {
+          const lastSentAt = existing.data()?.sentAt as string | undefined;
+          if (lastSentAt) {
+            const elapsed = Date.now() - new Date(lastSentAt).getTime();
+            if (elapsed < cooldownMs) {
+              throw new HttpsError('resource-exhausted', 'انتظر قليلاً قبل إعادة الإرسال');
+            }
           }
         }
       }
 
-      const code = String(randomInt(0, 10 ** length)).padStart(length, '0');
+      const code = isPlayReview
+        ? PLAY_REVIEW_OTP
+        : String(randomInt(0, 10 ** length)).padStart(length, '0');
       const expiresAt = new Date(now.getTime() + expiryMinutes * 60_000).toISOString();
       const provider = (otpiqProvider.value() as OtpiqProvider) || 'whatsapp-telegram-sms';
 
-      const { smsId } = await sendOtpiqVerification({
-        apiKey,
-        phoneE164: phone,
-        code,
-        provider,
-      });
+      const { smsId } = isPlayReview
+        ? {}
+        : await sendOtpiqVerification({
+            apiKey,
+            phoneE164: phone,
+            code,
+            provider,
+          });
 
       await sessionRef.set({
         phone,
@@ -133,16 +143,19 @@ export const sendOtp = onCall(
         sentAt: now.toISOString(),
         expiresAt,
         smsId: smsId ?? null,
-        provider,
+        provider: isPlayReview ? 'google-play-review' : provider,
         fixedDev: false,
+        playReview: isPlayReview,
       });
 
-      await rateRef.set({
-        phone,
-        count: hourlyCount + 1,
-        windowStart: windowStartIso,
-        updatedAt: now.toISOString(),
-      });
+      if (!isPlayReview) {
+        await rateRef.set({
+          phone,
+          count: hourlyCount + 1,
+          windowStart: windowStartIso,
+          updatedAt: now.toISOString(),
+        });
+      }
 
       await db.collection('otpLogs').add({
         phone,
@@ -150,6 +163,7 @@ export const sendOtp = onCall(
         success: true,
         smsId: smsId ?? null,
         fixedDev: false,
+        playReview: isPlayReview,
         createdAt: now.toISOString(),
       });
 
@@ -187,6 +201,7 @@ export const verifyOtp = onCall(callOptions, async (request) => {
     }
 
     const phone = normalizeIraqiPhone(rawPhone);
+    const isPlayReview = phone === PLAY_REVIEW_PHONE;
     const db = getFirestore();
     const auth = getAuth();
     const sessionRef = db.collection('otpSessions').doc(otpSessionId(phone));
@@ -253,7 +268,7 @@ export const verifyOtp = onCall(callOptions, async (request) => {
     const profile = {
       id: fbUser.uid,
       phone,
-      name: existing?.name || prevCustomer?.name || '',
+      name: existing?.name || prevCustomer?.name || (isPlayReview ? 'Google Play Reviewer' : ''),
       governorate: existing?.governorate || prevCustomer?.governorate || '',
       city: existing?.city || prevCustomer?.city || '',
       address: existing?.address || '',
