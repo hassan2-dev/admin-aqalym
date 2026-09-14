@@ -302,3 +302,83 @@ export const verifyOtp = onCall(callOptions, async (request) => {
     asHttpsError(e);
   }
 });
+
+export const deleteAccount = onCall(callOptions, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) {
+    throw new HttpsError('unauthenticated', 'يجب تسجيل الدخول لحذف الحساب');
+  }
+
+  const db = getFirestore();
+  const auth = getAuth();
+
+  try {
+    const [userSnap, authUser, ordersSnap] = await Promise.all([
+      db.collection('users').doc(uid).get(),
+      auth.getUser(uid),
+      db.collection('orders').where('customerId', '==', uid).get(),
+    ]);
+
+    const activeOrders = ordersSnap.docs.filter((order) => {
+      const status = String(order.data().status ?? '');
+      return status !== 'completed' && status !== 'cancelled';
+    });
+    if (activeOrders.length > 0) {
+      throw new HttpsError(
+        'failed-precondition',
+        'لا يمكن حذف الحساب مع وجود طلب نشط. تواصل معنا لإكمال الطلب أو إلغائه أولاً.',
+      );
+    }
+
+    const now = new Date();
+    const retainedUntil = new Date(now);
+    retainedUntil.setFullYear(retainedUntil.getFullYear() + 5);
+    const deletedAt = now.toISOString();
+    const phone = String(userSnap.data()?.phone ?? authUser.phoneNumber ?? '').trim();
+    const writer = db.bulkWriter();
+
+    for (const order of ordersSnap.docs) {
+      const data = order.data();
+      const location = (data.location ?? {}) as {
+        governorate?: string;
+        city?: string;
+      };
+      writer.update(order.ref, {
+        customerId: `deleted-${order.id}`,
+        customerName: 'حساب محذوف',
+        customerPhone: '',
+        location: {
+          governorate: location.governorate ?? '',
+          city: location.city ?? '',
+          address: '',
+        },
+        notes: '',
+        accountDeletedAt: deletedAt,
+        retainedUntil: retainedUntil.toISOString(),
+        updatedAt: deletedAt,
+      });
+    }
+
+    if (phone) {
+      const [otpLogsSnap] = await Promise.all([
+        db.collection('otpLogs').where('phone', '==', phone).get(),
+      ]);
+      for (const log of otpLogsSnap.docs) writer.delete(log.ref);
+
+      const sessionId = otpSessionId(phone);
+      writer.delete(db.collection('otpSessions').doc(sessionId));
+      writer.delete(db.collection('otpRate').doc(sessionId));
+    }
+
+    await writer.close();
+    await Promise.all([
+      db.recursiveDelete(db.collection('users').doc(uid)),
+      db.recursiveDelete(db.collection('customers').doc(uid)),
+    ]);
+    await auth.deleteUser(uid);
+
+    return { ok: true };
+  } catch (e) {
+    asHttpsError(e);
+  }
+});
