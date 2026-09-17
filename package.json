@@ -12,7 +12,7 @@
     "firebase:setup": "npx tsx scripts/firebase-setup.ts",
     "firebase:wipe": "npx tsx scripts/wipe-firebase.ts",
     "otp:deploy": "npx firebase-tools deploy --only functions",
-    "hosting:deploy": "npx firebase-tools deploy --only hosting",
+    "hosting:deploy": "npx firebase-tools deploy --only hosting --project aqalym-iraq",
     "typecheck": "tsc --noEmit",
     "vercel:prod": "npx vercel@latest --prod --yes"
   },
