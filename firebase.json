@@ -12,5 +12,14 @@
       ],
       "predeploy": ["npm --prefix functions run build"]
     }
-  ]
+  ],
+  "hosting": {
+    "public": "hosting",
+    "cleanUrls": true,
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      { "source": "/support", "destination": "/index.html" },
+      { "source": "/support/**", "destination": "/index.html" }
+    ]
+  }
 }
