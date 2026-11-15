@@ -12,7 +12,7 @@ import {
 
 export const runtime = 'nodejs';
 
-/** محلي/اختياري. الإنتاج يستخدم Firebase Cloud Functions + OTPIQ. */
+/** إنتاج التطبيق عبر Vercel + OTPIQ (بدون Firebase Blaze / Cloud Functions). */
 
 function hashCode(code: string): string {
   return createHash('sha256').update(code).digest('hex');

@@ -6,10 +6,37 @@ import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 
 let app: App | null = null;
 
+function parseServiceAccountJson(raw: string): ServiceAccount {
+  const trimmed = raw.trim();
+  const candidates = [trimmed];
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    candidates.push(trimmed.slice(1, -1));
+  }
+  // Vercel / dotenv sometimes keep escaped newlines inside the JSON string.
+  candidates.push(trimmed.replace(/\\n/g, '\n'));
+  let lastError: unknown;
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate) as ServiceAccount;
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('FIREBASE_SERVICE_ACCOUNT_JSON غير صالح');
+}
+
 function loadServiceAccount(): ServiceAccount {
+  const fromB64 = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64?.trim();
+  if (fromB64) {
+    return parseServiceAccountJson(Buffer.from(fromB64, 'base64').toString('utf8'));
+  }
+
   const fromEnv = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (fromEnv?.trim()) {
-    return JSON.parse(fromEnv) as ServiceAccount;
+    return parseServiceAccountJson(fromEnv);
   }
 
   const keyPath = resolve(process.cwd(), 'serviceAccountKey.json');

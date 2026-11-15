@@ -2,6 +2,12 @@
   "name": "aqalym-admin",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "22.x"
+  },
+  "overrides": {
+    "jose": "4.15.9"
+  },
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",

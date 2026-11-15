@@ -47,3 +47,8 @@ ui-debug.log
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+.vercel-sa.json
+
+.env.vercel*
+.vercel-sa.json
