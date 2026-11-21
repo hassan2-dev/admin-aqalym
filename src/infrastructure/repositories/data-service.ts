@@ -37,7 +37,7 @@ import { assertCanApprove, isOrderPriced } from '@/shared/lib/order-flow';
 import { customerFromAppUser, customerFromOrder, mergeCustomersFromOrders } from '@/shared/lib/customers';
 import { normalizeOffering } from '@/shared/lib/offering';
 import { demoDb, getDemoState } from '@/infrastructure/demo/store';
-import { getFirebaseDb, isDemoMode } from '@/infrastructure/firebase/client';
+import { getFirebaseAuth, getFirebaseDb, isDemoMode } from '@/infrastructure/firebase/client';
 
 async function listCollection<T>(name: string): Promise<T[]> {
   const db = getFirebaseDb();
@@ -456,14 +456,34 @@ export const dataService = {
     if (isDemoMode) return getDemoState().staff;
     return listCollection<StaffUser>('staff');
   },
-  saveStaff: (input: Parameters<typeof demoDb.saveStaff>[0]) =>
-    isDemoMode
-      ? demoDb.saveStaff(input)
-      : demoDb.saveStaff(input).then((u) => upsertDoc('staff', u)),
-  deleteStaff: async (id: string) => {
+  async saveStaff(input: Parameters<typeof demoDb.saveStaff>[0]) {
+    if (isDemoMode) return demoDb.saveStaff(input);
+    const auth = getFirebaseAuth();
+    const token = await auth?.currentUser?.getIdToken();
+    if (!token) throw new Error('لازم تكون مسجّل دخول');
+    const res = await fetch('/api/staff', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(input),
+    });
+    const data = (await res.json()) as { staff?: StaffUser; error?: string };
+    if (!res.ok || !data.staff) throw new Error(data.error || 'فشل حفظ المستخدم');
+    return data.staff;
+  },
+  async deleteStaff(id: string) {
     if (isDemoMode) return demoDb.deleteStaff(id);
-    const db = getFirebaseDb();
-    if (db) await deleteDoc(doc(db, 'staff', id));
+    const auth = getFirebaseAuth();
+    const token = await auth?.currentUser?.getIdToken();
+    if (!token) throw new Error('لازم تكون مسجّل دخول');
+    const res = await fetch(`/api/staff?id=${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = (await res.json()) as { error?: string };
+    if (!res.ok) throw new Error(data.error || 'فشل حذف المستخدم');
   },
 
   async listRoles() {

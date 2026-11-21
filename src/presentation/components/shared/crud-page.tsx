@@ -20,10 +20,12 @@ import { ImageUpload } from '@/presentation/components/shared/image-upload';
 export type FieldDef = {
   name: string;
   label: string;
-  type?: 'text' | 'number' | 'money' | 'textarea' | 'select' | 'image';
+  type?: 'text' | 'number' | 'money' | 'textarea' | 'select' | 'image' | 'password';
   options?: { value: string; label: string }[];
   required?: boolean;
   folder?: string;
+  hint?: string;
+  ltr?: boolean;
 };
 
 export function CrudPage<T extends { id: string }>({
@@ -177,10 +179,14 @@ export function CrudPage<T extends { id: string }>({
                   <Input
                     type={field.type ?? 'text'}
                     required={field.required}
+                    dir={field.ltr || field.type === 'password' ? 'ltr' : undefined}
+                    className={field.ltr || field.type === 'password' ? 'text-left' : undefined}
+                    autoComplete={field.type === 'password' ? 'new-password' : undefined}
                     value={form[field.name] ?? ''}
                     onChange={(e) => setForm((f) => ({ ...f, [field.name]: e.target.value }))}
                   />
                 )}
+                {field.hint ? <p className="text-xs text-muted-foreground">{field.hint}</p> : null}
               </div>
             ))}
             <Button type="submit" className="w-full" variant="accent">

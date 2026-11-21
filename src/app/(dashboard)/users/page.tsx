@@ -17,7 +17,7 @@ export default function UsersPage() {
   return (
     <CrudPage<StaffUser>
       title="المستخدمون"
-      description="ثلاث شخصيات: مشرف عام، مبيعات، مصنع"
+      description="كل مستخدم يدخل بإيميله وكلمة المرور التي تحددها له"
       headers={['الاسم', 'البريد', 'الدور', 'الحالة']}
       items={data}
       loading={isLoading}
@@ -25,8 +25,14 @@ export default function UsersPage() {
       onRetry={() => void refetch()}
       fields={[
         { name: 'name', label: 'الاسم', required: true },
-        { name: 'email', label: 'البريد', required: true },
-        { name: 'phone', label: 'الهاتف' },
+        { name: 'email', label: 'البريد', required: true, ltr: true },
+        {
+          name: 'password',
+          label: 'كلمة المرور',
+          type: 'password',
+          hint: 'مطلوبة عند إضافة مستخدم. عند التعديل اتركها فارغة إذا ما تريد تغييرها.',
+        },
+        { name: 'phone', label: 'الهاتف', ltr: true },
         {
           name: 'roleId',
           label: 'الدور',
@@ -65,6 +71,13 @@ export default function UsersPage() {
         status: u.status,
       })}
       onSave={async (values, editing) => {
+        const password = values.password?.trim() ?? '';
+        if (!editing && password.length < 6) {
+          throw new Error('اكتب كلمة مرور من 6 أحرف على الأقل');
+        }
+        if (editing && password && password.length < 6) {
+          throw new Error('كلمة المرور لازم تكون 6 أحرف على الأقل');
+        }
         await save.mutateAsync({
           id: editing?.id,
           name: values.name!,
@@ -72,6 +85,7 @@ export default function UsersPage() {
           phone: values.phone,
           roleId: values.roleId!,
           status: (values.status as StaffUser['status']) || 'active',
+          ...(password ? { password } : {}),
         });
       }}
       onDelete={async (item) => remove.mutateAsync(item.id)}

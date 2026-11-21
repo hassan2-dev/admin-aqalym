@@ -67,6 +67,7 @@ export interface DemoState {
   otpLogs: OtpLog[];
   roles: Role[];
   staff: StaffUser[];
+  staffPasswords: Record<string, string>;
   settings: CompanySettings;
   session: StaffUser | null;
 }
@@ -90,6 +91,11 @@ function initialState(): DemoState {
     otpLogs: structuredClone(SEED_OTP_LOGS),
     roles: structuredClone(SEED_ROLES),
     staff: structuredClone(SEED_STAFF),
+    staffPasswords: {
+      'staff-1': 'Admin@123',
+      'staff-2': 'Admin@123',
+      'staff-3': 'Admin@123',
+    },
     settings: structuredClone(SEED_SETTINGS),
     session: null,
   };
@@ -150,7 +156,8 @@ export const demoDb = {
   async login(email: string, password: string): Promise<StaffUser> {
     const state = load();
     const user = state.staff.find((s) => s.email.toLowerCase() === email.toLowerCase());
-    if (!user || password !== 'Admin@123') {
+    const expected = user ? state.staffPasswords?.[user.id] || 'Admin@123' : '';
+    if (!user || password !== expected) {
       throw new Error('بيانات الدخول غير صحيحة');
     }
     if (user.status !== 'active') throw new Error('الحساب غير نشط');
@@ -784,34 +791,40 @@ export const demoDb = {
   },
 
   // Staff / Roles
-  async saveStaff(input: Partial<StaffUser> & Pick<StaffUser, 'email' | 'name' | 'roleId'>) {
+  async saveStaff(
+    input: Partial<StaffUser> & Pick<StaffUser, 'email' | 'name' | 'roleId'> & { password?: string },
+  ) {
     const now = new Date().toISOString();
-    let id = input.id;
+    const { password, ...profile } = input;
+    let id = profile.id;
     mutate((s) => {
-      const role = s.roles.find((r) => r.id === input.roleId)!;
+      const role = s.roles.find((r) => r.id === profile.roleId)!;
+      if (!s.staffPasswords) s.staffPasswords = {};
       if (id) {
         const idx = s.staff.findIndex((u) => u.id === id);
         if (idx >= 0) {
           s.staff[idx] = {
             ...s.staff[idx]!,
-            ...input,
+            ...profile,
             roleSlug: role.slug,
             updatedAt: now,
           } as StaffUser;
         }
+        if (password) s.staffPasswords[id] = password;
       } else {
         id = generateId('staff');
         s.staff.unshift({
           id,
-          email: input.email,
-          name: input.name,
-          phone: input.phone,
-          roleId: input.roleId,
+          email: profile.email,
+          name: profile.name,
+          phone: profile.phone,
+          roleId: profile.roleId,
           roleSlug: role.slug,
-          status: input.status ?? 'active',
+          status: profile.status ?? 'active',
           createdAt: now,
           updatedAt: now,
         });
+        s.staffPasswords[id] = password || 'Admin@123';
       }
     });
     return load().staff.find((u) => u.id === id)!;
@@ -819,6 +832,7 @@ export const demoDb = {
   async deleteStaff(id: string) {
     mutate((s) => {
       s.staff = s.staff.filter((u) => u.id !== id);
+      if (s.staffPasswords) delete s.staffPasswords[id];
     });
   },
   async saveRole(input: Partial<Role> & Pick<Role, 'nameAr' | 'slug' | 'permissions'>) {
