@@ -25,7 +25,7 @@ export default function AccessoriesPage() {
         { name: 'category', label: 'التصنيف' },
         { name: 'price', label: 'السعر', type: 'money', required: true },
         { name: 'descriptionAr', label: 'الوصف', type: 'textarea' },
-        { name: 'image', label: 'رابط الصورة' },
+        { name: 'image', label: 'الصورة', type: 'image', folder: 'accessories' },
       ]}
       columns={(a) => [a.nameAr, a.category || '—', money(a.price)]}
       mapItemToForm={(a) => ({

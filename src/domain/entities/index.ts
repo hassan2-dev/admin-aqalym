@@ -129,6 +129,10 @@ export interface Product {
   accessories: string[];
   colors: ProductColor[];
   featured?: boolean;
+  /** يظهر في قسم خدمات الرئيسية بالتطبيق */
+  showOnHome?: boolean;
+  /** اسم أيقونة Ionicons لبطاقة الخدمة */
+  icon?: string;
   createdAt: string;
   updatedAt: string;
 }

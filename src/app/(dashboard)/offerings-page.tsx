@@ -140,6 +140,8 @@ export function OfferingsPage({
         accessories: form.accessories,
         colors,
         featured: form.featured,
+        showOnHome: form.offeringType === 'service' ? form.showOnHome : false,
+        icon: form.icon.trim() || undefined,
       });
       setSelectedId(saved.id);
       toast.success(editing ? 'تم التحديث' : 'تم إنشاء العنصر');
@@ -236,6 +238,7 @@ export function OfferingsPage({
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {p.requiresMeasurements ? 'يحتاج قياسات' : 'بدون قياس'} · {pricingHint(p)}
+                    {p.showOnHome ? ' · الرئيسية' : ''}
                   </p>
                   <p className="mt-2 text-sm font-bold text-primary">
                     {p.pricingMode === 'sales_quote' || p.pricingMode === 'none'

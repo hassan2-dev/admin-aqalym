@@ -37,7 +37,7 @@ export default function CategoriesPage() {
           ],
         },
         { name: 'descriptionAr', label: 'الوصف', type: 'textarea' },
-        { name: 'image', label: 'رابط الصورة' },
+        { name: 'image', label: 'الصورة', type: 'image', folder: 'categories' },
         { name: 'order', label: 'الترتيب', type: 'number' },
       ]}
       columns={(c) => [c.nameAr, c.slug, String(c.order)]}

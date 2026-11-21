@@ -33,7 +33,7 @@ export default function ProjectsPage() {
         },
         { name: 'category', label: 'التصنيف' },
         { name: 'completionDate', label: 'تاريخ الإنجاز (YYYY-MM-DD)', required: true },
-        { name: 'images', label: 'رابط صورة' },
+        { name: 'images', label: 'الصورة', type: 'image', folder: 'projects' },
         { name: 'videos', label: 'رابط فيديو' },
       ]}
       columns={(p) => [

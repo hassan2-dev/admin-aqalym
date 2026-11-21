@@ -8,6 +8,7 @@ import type {
   ProductSpec,
 } from '@/domain/entities';
 import type { OfferingType, PricingMode } from '@/domain/enums';
+import { ImageUpload } from '@/presentation/components/shared/image-upload';
 import { Button } from '@/presentation/components/ui/button';
 import { Input } from '@/presentation/components/ui/input';
 import { MoneyInput } from '@/presentation/components/ui/money-input';
@@ -40,6 +41,8 @@ export type OfferingFormState = {
   offeringType: OfferingType;
   published: boolean;
   featured: boolean;
+  showOnHome: boolean;
+  icon: string;
   sortOrder: string;
   pricingMode: PricingMode;
   estimatedPrice: string;
@@ -71,6 +74,8 @@ export function blankOfferingForm(
     offeringType,
     published: true,
     featured: false,
+    showOnHome: service,
+    icon: '',
     sortOrder: '0',
     pricingMode: service ? 'sales_quote' : 'sales_quote',
     estimatedPrice: '',
@@ -103,6 +108,8 @@ export function offeringToForm(p: Product): OfferingFormState {
     offeringType: n.offeringType,
     published: n.published,
     featured: !!n.featured,
+    showOnHome: n.showOnHome === true,
+    icon: n.icon ?? '',
     sortOrder: String(n.sortOrder ?? 0),
     pricingMode: n.pricingMode,
     estimatedPrice: String(n.estimatedPrice || ''),
@@ -209,8 +216,14 @@ export function OfferingBuilder({
             </select>
           </div>
           <div>
-            <Label>رابط الصورة</Label>
-            <Input className="mt-1" value={form.images} onChange={(e) => patch({ images: e.target.value })} />
+            <Label>الصورة</Label>
+            <div className="mt-1">
+              <ImageUpload
+                value={form.images}
+                folder="offerings"
+                onChange={(url) => patch({ images: url })}
+              />
+            </div>
           </div>
         </div>
         <div>
@@ -226,6 +239,16 @@ export function OfferingBuilder({
             />
             منشور للزبون
           </label>
+          {form.offeringType === 'service' ? (
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={form.showOnHome}
+                onChange={(e) => patch({ showOnHome: e.target.checked })}
+              />
+              تظهر في الرئيسية (قياس / صيانة)
+            </label>
+          ) : null}
           <label className="flex items-center gap-2">
             <input
               type="checkbox"

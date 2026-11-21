@@ -15,13 +15,15 @@ import { Textarea } from '@/presentation/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/presentation/components/ui/dialog';
 import { Skeleton } from '@/presentation/components/ui/skeleton';
 import { formatCurrency } from '@/shared/lib/utils';
+import { ImageUpload } from '@/presentation/components/shared/image-upload';
 
 export type FieldDef = {
   name: string;
   label: string;
-  type?: 'text' | 'number' | 'money' | 'textarea' | 'select';
+  type?: 'text' | 'number' | 'money' | 'textarea' | 'select' | 'image';
   options?: { value: string; label: string }[];
   required?: boolean;
+  folder?: string;
 };
 
 export function CrudPage<T extends { id: string }>({
@@ -164,6 +166,12 @@ export function CrudPage<T extends { id: string }>({
                     required={field.required}
                     value={form[field.name] ?? ''}
                     onValueChange={(digits) => setForm((f) => ({ ...f, [field.name]: digits }))}
+                  />
+                ) : field.type === 'image' ? (
+                  <ImageUpload
+                    value={form[field.name] ?? ''}
+                    folder={field.folder}
+                    onChange={(url) => setForm((f) => ({ ...f, [field.name]: url }))}
                   />
                 ) : (
                   <Input

@@ -498,6 +498,8 @@ export const demoDb = {
           accessories: input.accessories ?? [],
           colors: input.colors ?? [],
           featured: input.featured ?? false,
+          showOnHome: input.showOnHome ?? false,
+          icon: input.icon,
           createdAt: now,
           updatedAt: now,
         });

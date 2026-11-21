@@ -26,7 +26,7 @@ export default function GlassTypesPage() {
         { name: 'color', label: 'اللون' },
         { name: 'pricePerSqm', label: 'السعر / م²', type: 'money', required: true },
         { name: 'descriptionAr', label: 'الوصف', type: 'textarea' },
-        { name: 'image', label: 'رابط الصورة' },
+        { name: 'image', label: 'الصورة', type: 'image', folder: 'glass' },
       ]}
       columns={(g) => [g.nameAr, g.thickness ? `${g.thickness} مم` : '—', g.color || '—', money(g.pricePerSqm)]}
       mapItemToForm={(g) => ({
